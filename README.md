@@ -50,6 +50,30 @@ bookmarklet, `shortcut.js` for iOS Shortcuts, and the encoded bookmarklet
 links). The loader bookmarklet expects this repo's `docs/` folder to be served
 by GitHub Pages at `https://cwervo.github.io/bookmarklets/`.
 
+# Wikipedia Edit History Colors
+
+[Colors every word of a Wikipedia article by the date it was added](https://cwervo.github.io/bookmarklets/wikipedia-edit-history-colors/)
+(source in [`wikipedia-edit-history-colors/source.js`](./wikipedia-edit-history-colors/source.js)).
+The ramp is ROYGBV from the article's first edit to its newest one, with lightness
+climbing from black to white along the way so the order still reads in grayscale or
+with color blindness (there are also Mono and Ink modes, and a reverse button).
+Spaces are never colored. Hover a word for the date range it was added in, and
+**triple-click or triple-tap** a word to pinpoint the exact revision and open a
+60%-inset popup showing that section as it was then, centered on that word.
+
+It only talks to Wikipedia's own API (same origin, no third-party service), so it
+works on every language edition. History is sampled at evenly spaced points in
+time plus adaptive extra samples, each word is dated to the earliest sample that
+contains it next to one of its neighbours, and triple-clicking binary-searches the
+revisions in between for the exact edit.
+
+Grab the bookmarklet from the [docs page](https://cwervo.github.io/bookmarklets/wikipedia-edit-history-colors/),
+which also has a tiny loader variant for browsers that reject long bookmark URLs.
+Rebuild the docs page and the hosted script with:
+
+```
+cd wikipedia-edit-history-colors && node build.js
+```
 ## Development
 
 To compile the bookmarklet to an HTML escaped, function-wrapped line of
