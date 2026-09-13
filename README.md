@@ -27,17 +27,120 @@ a **bag** you fill up, and a guided **checkout** that walks through Watsonline's
 own request flow for every item in the bag (sign in once, pick a pickup
 location, submit, next). There's also an account sheet for checkouts and holds.
 
-It is meant to be launched from the **iOS Shortcuts** app: paste
-`docs/met-library/shortcut.js` into a "Run JavaScript on Web Page" action and
-run it from Safari's share sheet on Watsonline. It also works as a plain Safari
-bookmarklet. Install instructions, copy buttons and the built bookmarklet
-links live on the docs page: <https://cwervo.github.io/bookmarklets/met-library/>
+Everything you need to install it (buttons, copy links, the Shortcut script)
+is on the docs page: <https://cwervo.github.io/bookmarklets/met-library/>
 
-How it works: the script runs on `library.metmuseum.org`, fetches the
-catalog's own HTML (same origin), and re-renders it. Signing in and placing
-requests happen on the real Watsonline pages inside a sheet with mobile CSS,
-so no credentials ever touch anything but the Met's own site. Your bag and
-recent searches are kept in Safari's local storage for that site.
+There are two flavors of the bookmarklet, both on that page:
+
+- **Loader** (recommended): a tiny bookmark that fetches the latest
+  `docs/met-library/app.js` each time it runs, so it updates itself.
+- **Self-contained**: the whole app inside the bookmark. Works even if the
+  docs page disappears; update it by re-copying.
+
+## Installing in a desktop browser
+
+1. Open the [docs page](https://cwervo.github.io/bookmarklets/met-library/).
+2. Drag the **Watson Library** button onto your bookmarks bar (Chrome, Firefox,
+   Safari, Edge and Arc all support this). If your bar is hidden, show it
+   first: <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> in most
+   browsers.
+   - No drag and drop? Tap **Copy link**, create any bookmark, then edit it and
+     paste the copied `javascript:` link into its URL/address field.
+3. Go to <https://library.metmuseum.org> and click the bookmark. (Clicking it
+   from any other site just sends you to Watsonline; click it again there.)
+
+## Installing on a phone
+
+<details>
+<summary><strong>iOS / iPadOS — Shortcuts app (recommended)</strong></summary>
+
+The Shortcuts app can run JavaScript on the page open in Safari, which makes
+the bookmarklet a one-tap item in the share sheet.
+
+1. Open the **Shortcuts** app and tap **+** to create a new shortcut.
+2. Tap **Add Action**, search for **Run JavaScript on Web Page** (under
+   Safari) and add it.
+3. Delete the sample code inside the action and paste in the script. Get it
+   with the **Copy the Shortcut script** button on the
+   [docs page](https://cwervo.github.io/bookmarklets/met-library/), or copy
+   the contents of [`docs/met-library/shortcut.js`](./docs/met-library/shortcut.js).
+4. Tap the shortcut's name at the top and **Rename** it to “Watson Library”.
+5. Open the shortcut's details (the ⓘ button), turn on **Show in Share
+   Sheet**, and under **Share Sheet Types** keep only **Safari web pages**.
+6. In Safari, open <https://library.metmuseum.org>, tap the **Share** button
+   and pick **Watson Library**.
+
+The script calls `completion()` when the UI is up, which the Shortcuts action
+requires. Running it from any other page redirects you to Watsonline first;
+run it once more when the page has loaded.
+
+</details>
+
+<details>
+<summary><strong>iOS / iPadOS — Safari bookmark</strong></summary>
+
+Safari on iOS has no bookmarks bar to drag onto, so the bookmark is edited by
+hand:
+
+1. On the [docs page](https://cwervo.github.io/bookmarklets/met-library/), tap
+   **Copy link** next to the **Watson Library** (loader) button.
+2. Bookmark any page: **Share → Add Bookmark**, name it “Watson Library”,
+   save.
+3. Open the **Bookmarks** panel, tap **Edit**, tap the new bookmark, replace
+   its address with the copied `javascript:` link, and save.
+4. Open <https://library.metmuseum.org>, then tap the bookmark from the
+   Bookmarks panel (or start typing “Watson Library” in the address bar and
+   pick it).
+
+Add it to **Favorites** to have it on Safari's start page.
+
+</details>
+
+<details>
+<summary><strong>Android — Chrome</strong></summary>
+
+Chrome on Android runs bookmarklets only when launched from the address bar:
+
+1. On the [docs page](https://cwervo.github.io/bookmarklets/met-library/), tap
+   **Copy link** next to the **Watson Library** (loader) button.
+2. Bookmark any page (**⋮ → ☆**), then open **⋮ → Bookmarks**, tap the
+   bookmark's **⋮ → Edit**, replace its URL with the copied `javascript:` link
+   and name it “Watson Library”.
+3. Open <https://library.metmuseum.org>, tap the address bar, start typing
+   “Watson Library”, and choose the bookmark from the suggestions. Tapping it
+   from the Bookmarks list will not run it.
+
+</details>
+
+<details>
+<summary><strong>Android — Firefox</strong></summary>
+
+1. Copy the loader link from the
+   [docs page](https://cwervo.github.io/bookmarklets/met-library/).
+2. Bookmark any page, then open **Bookmarks**, long-press the bookmark,
+   choose **Edit**, and paste the `javascript:` link as its URL.
+3. On <https://library.metmuseum.org>, type the bookmark's name in the address
+   bar and pick it from the suggestions. Firefox also runs bookmarklets tapped
+   directly from the Bookmarks list.
+
+</details>
+
+<details>
+<summary><strong>Android — Samsung Internet</strong></summary>
+
+Samsung Internet supports bookmarklets from its Bookmarks page: add a
+bookmark, edit it to use the copied `javascript:` link, then open Watsonline
+and tap the bookmark from **☰ → Bookmarks**.
+
+</details>
+
+## How it works
+
+The script runs on `library.metmuseum.org`, fetches the catalog's own HTML
+(same origin), and re-renders it. Signing in and placing requests happen on
+the real Watsonline pages inside a sheet with mobile CSS, so no credentials
+ever touch anything but the Met's own site. Your bag and recent searches are
+kept in the browser's local storage for that site.
 
 Building it (no dependencies; `terser` is used to minify if it's resolvable):
 
