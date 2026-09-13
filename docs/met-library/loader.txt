@@ -1,0 +1,1 @@
+javascript:(function()%7Bif(location.hostname!%3D%3D'library.metmuseum.org')%7Blocation.href%3D'https%3A%2F%2Flibrary.metmuseum.org%2F'%3Breturn%7Dvar%20s%3Ddocument.createElement('script')%3Bs.src%3D'https%3A%2F%2Fcwervo.github.io%2Fbookmarklets%2Fmet-library%2Fapp.js%3F'%2BDate.now()%3Bdocument.documentElement.appendChild(s)%7D)()

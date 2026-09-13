@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Watson Library — a modern search &amp; checkout flow for the Met's library catalog</title>
+  <meta name="description" content="A bookmarklet / iOS Shortcut that wraps library.metmuseum.org (Watsonline) in a phone-first search, bag and request flow.">
+  <style>
+    :root { --red: #e4002b; --fg: #141414; --muted: #666; --line: #e5e3de; --bg: #faf9f6; --card: #fff; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #f1f1f1; --muted: #a5a5a5; --line: #2b2b2b; --bg: #111; --card: #1b1b1b; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--fg); background: var(--bg); padding: 0 20px; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 0 80px; }
+    .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--red); font-weight: 700; }
+    h1 { font-family: "New York", "Iowan Old Style", Palatino, Georgia, serif; font-size: 40px; line-height: 1.1; margin: 4px 0 12px; }
+    h2 { font-family: "New York", "Iowan Old Style", Palatino, Georgia, serif; font-size: 26px; margin: 44px 0 10px; }
+    h3 { font-size: 17px; margin: 22px 0 6px; }
+    p { margin: 0 0 14px; }
+    .lead { font-size: 20px; color: var(--muted); }
+    a { color: var(--red); }
+    ol, ul { padding-left: 22px; } li { margin-bottom: 8px; }
+    .btn { display: inline-block; padding: 12px 18px; border-radius: 12px; background: var(--red); color: #fff !important; text-decoration: none; font-weight: 700; margin: 4px 8px 8px 0; border: 0; font: inherit; cursor: pointer; }
+    .btn.alt { background: var(--fg); color: var(--bg) !important; }
+    .btn.ghost { background: transparent; color: var(--fg) !important; border: 1px solid var(--line); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin: 14px 0; }
+    .card p:last-child { margin-bottom: 0; }
+    details { margin: 10px 0; } summary { cursor: pointer; font-weight: 600; }
+    textarea { width: 100%; height: 220px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--card); color: var(--fg); margin-top: 10px; }
+    code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+    .grid div { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .grid b { display: block; margin-bottom: 4px; }
+    .muted { color: var(--muted); font-size: 15px; }
+    .note { border-left: 3px solid var(--red); padding-left: 14px; color: var(--muted); }
+    footer { margin-top: 60px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">The Met · Thomas J. Watson Library</div>
+  <h1>Watson Library, but for your phone</h1>
+  <p class="lead">A bookmarklet that wraps <a href="https://library.metmuseum.org">library.metmuseum.org</a> (Watsonline) in a modern search, bag and request flow. Launch it from the iOS Shortcuts share sheet or a Safari bookmark.</p>
+
+  <div class="grid">
+    <div><b>🔍 Search</b><span class="muted">Big search box, Everything / Title / Author / Subject, recent searches, endless scroll.</span></div>
+    <div><b>📖 Records</b><span class="muted">Clean detail sheet: copies, call numbers, status, subjects, online links.</span></div>
+    <div><b>👜 Bag → Checkout</b><span class="muted">Collect books, then request them all in one guided flow. Watson pages them for your visit.</span></div>
+    <div><b>👤 Account</b><span class="muted">Sign in, see checkouts and holds, sign out — inside the same sheet.</span></div>
+  </div>
+
+  <h2>1 · Install as an iOS Shortcut</h2>
+  <p>iOS Shortcuts can run JavaScript on the page that's open in Safari. Set it up once, then it's one tap from the share sheet.</p>
+  <div class="card">
+    <ol>
+      <li>Open the <b>Shortcuts</b> app and tap <b>+</b> to create a new shortcut.</li>
+      <li>Add the action <b>Run JavaScript on Web Page</b> (search for it; it's under Safari).</li>
+      <li>Delete the sample code inside the action and paste the script below.
+        <p><button class="btn" id="copy-shortcut" type="button">Copy the Shortcut script</button></p>
+        <details><summary>Show the script</summary><textarea readonly id="shortcut-script">//
+// A phone-first search + request (&quot;checkout&quot;) experience layered on top of
+// Watsonline (https://library.metmuseum.org), the Sierra WebPAC catalog of the
+// Met's Thomas J. Watson Library.
+//
+// How it works: this script runs *on* library.metmuseum.org, so it can fetch
+// the catalog's own HTML (same origin) and re-render it as a modern UI. The
+// parts that need a signed-in session (placing a request, your account) are
+// the real Watsonline pages, shown inside a sheet with mobile-friendly CSS.
+//
+// Usable as a Safari bookmarklet or pasted into an iOS Shortcuts
+// &quot;Run JavaScript on Web Page&quot; action (it calls completion() when ready).
+(function () {
+  'use strict';
+
+  var HOST = 'library.metmuseum.org';
+  var APP_ID = 'watson-app-host';
+  var STORE = { bag: 'watson.bag', recent: 'watson.recent', requested: 'watson.requested' };
+  var COVER_API = 'https://covers.openlibrary.org/b/isbn/';
+
+  function finish() {
+    // iOS Shortcuts &quot;Run JavaScript on Web Page&quot; requires completion() to be called.
+    try { if (typeof completion === 'function') completion(); } catch (e) { /* not in Shortcuts */ }
+  }
+
+  if (location.hostname !== HOST) {
+    // Not on Watsonline yet: go there. Run the bookmarklet/shortcut again once it loads.
+    location.href = 'https://' + HOST + '/';
+    finish();
+    return;
+  }
+
+  var previous = document.getElementById(APP_ID);
+  if (previous) previous.remove();
+
+  // ---------------------------------------------------------------------------
+  // Catalog plumbing (Sierra WebPAC URL conventions)
+  // ---------------------------------------------------------------------------
+
+  var scopeMatch = location.pathname.match(/~S(\d+)/);
+  var SCOPE = scopeMatch ? scopeMatch[1] : '1';
+  var TILDE = '~S' + SCOPE;
+  var ORIGIN = location.origin;
+
+  var FIELDS = [
+    { key: 'X', label: 'Everything', prefix: '' },
+    { key: 't', label: 'Title', prefix: 't:' },
+    { key: 'a', label: 'Author', prefix: 'a:' },
+    { key: 'd', label: 'Subject', prefix: 'd:' }
+  ];
+  var SORTS = [
+    { key: 'R', label: 'Relevance' },
+    { key: 'D', label: 'Date' }
+  ];
+
+  function searchUrl(q, field, sort) {
+    var arg = field.prefix ? field.prefix + '(' + q + ')' : q;
+    return ORIGIN + '/search' + TILDE + '/?searchtype=X&amp;searcharg=' + encodeURIComponent(arg) +
+      '&amp;searchscope=' + SCOPE + '&amp;SORT=' + sort + '&amp;extended=0&amp;SUBMIT=Search&amp;searchlimits=';
+  }
+  function recordUrl(id) { return ORIGIN + '/record=' + id + TILDE; }
+  function requestUrlFor(id) {
+    return ORIGIN + '/search' + TILDE + '?/.' + id + '/.' + id + '/1,1,1,B/request~' + id;
+  }
+  var ACCOUNT_URL = ORIGIN + '/patroninfo' + TILDE + '/';
+  var LOGOUT_URL = ORIGIN + '/logout' + TILDE + '?';
+
+  function absolutize(href) {
+    try { return new URL(href, location.href).href; } catch (e) { return href; }
+  }
+
+  function clean(s) { return (s || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim(); }
+
+  // textContent, but with &lt;br&gt; and block elements turned into line breaks.
+  function textLines(node) {
+    var out = '';
+    (function walk(n) {
+      for (var c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { out += c.nodeValue; continue; }
+        if (c.nodeType !== 1) continue;
+        var tag = c.tagName;
+        if (tag === 'SCRIPT' || tag === 'STYLE') continue;
+        if (tag === 'BR') { out += '\n'; continue; }
+        var block = /^(DIV|P|TR|LI|TABLE|UL|OL|DD|DT|H[1-6])$/.test(tag);
+        if (block) out += '\n';
+        walk(c);
+        if (block) out += '\n';
+      }
+    })(node);
+    return out;
+  }
+  function lines(node) {
+    return textLines(node).split('\n').map(clean).filter(Boolean);
+  }
+
+  async function fetchDoc(url) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 20000) : null;
+    try {
+      var res = await fetch(url, { credentials: 'same-origin', signal: ctrl ? ctrl.signal : undefined });
+      if (!res.ok) throw new Error('Watsonline answered with status ' + res.status);
+      var html = await res.text();
+      return { doc: new DOMParser().parseFromString(html, 'text/html'), url: res.url || url };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  // Sierra brief-citation result rows all link to /record=bNNNNNNN. We group
+  // anchors by record id and grow each anchor's container upward until it
+  // would swallow a different record, which survives template differences.
+  function recordContainer(anchor, id, root) {
+    var el = anchor;
+    while (el.parentElement &amp;&amp; el.parentElement !== root &amp;&amp; el.parentElement !== root.body) {
+      var parent = el.parentElement;
+      var links = parent.querySelectorAll('a[href*=&quot;record=b&quot;]');
+      var foreign = false;
+      for (var i = 0; i &lt; links.length; i++) {
+        if ((links[i].getAttribute('href') || '').indexOf('record=' + id) === -1) { foreign = true; break; }
+      }
+      if (foreign) break;
+      el = parent;
+    }
+    return el;
+  }
+
+  // Sierra item statuses are rendered in upper case; matching case-sensitively
+  // keeps words like &quot;online&quot; in titles from being mistaken for a status.
+  var STATUS_RE = /\b(AVAILABLE|CHECKED OUT|IN LIBRARY|LIB USE ONLY|LIBRARY USE ONLY|IN PROCESS|ON HOLD|ON ORDER|DUE \d\d-\d\d-\d\d|MISSING|LOST|NON-CIRC|NON-CIRCULATING|ONLINE|IN TRANSIT|BEING PAGED|ASK AT DESK|ON RESERVE|STORAGE|OFFSITE)\b/;
+  var BIB_RE = /^b\d{5,9}$/;
+
+  function statusKind(s) {
+    s = (s || '').toUpperCase();
+    if (!s) return '';
+    if (/AVAILABLE|IN LIBRARY|ASK AT DESK/.test(s)) return 'ok';
+    if (/LIB USE|LIBRARY USE|NON-CIRC|ONLINE|ON RESERVE|STORAGE|OFFSITE/.test(s)) return 'note';
+    if (/CHECKED OUT|DUE|IN PROCESS|ON HOLD|ON ORDER|MISSING|LOST|IN TRANSIT|BEING PAGED/.test(s)) return 'busy';
+    return '';
+  }
+
+  function isHoldingsTable(table) {
+    if (table.querySelector('tr.bibItemsEntry')) return true;
+    var head = table.querySelector('tr');
+    var t = head ? clean(head.textContent).toUpperCase() : '';
+    return /STATUS/.test(t) &amp;&amp; /LOCATION|CALL/.test(t);
+  }
+
+  // Rows of (Location, Call No., [Vol/Copy], Status)
+  function holdingsFromTable(table) {
+    var out = [];
+    if (!isHoldingsTable(table)) return out;
+    var rows = table.querySelectorAll('tr');
+    for (var i = 0; i &lt; rows.length; i++) {
+      var cells = rows[i].querySelectorAll('td');
+      if (cells.length &lt; 2) continue;
+      var vals = [];
+      for (var j = 0; j &lt; cells.length; j++) vals.push(clean(textLines(cells[j])));
+      var status = '';
+      for (var k = vals.length - 1; k &gt;= 0; k--) {
+        if (vals[k].length &lt;= 40 &amp;&amp; STATUS_RE.test(vals[k])) { status = vals[k]; vals.splice(k, 1); break; }
+      }
+      if (!status &amp;&amp; !rows[i].classList.contains('bibItemsEntry')) continue;
+      out.push({ location: vals[0] || '', call: vals[1] || '', extra: vals.slice(2).join(' · '), status: status });
+    }
+    return out;
+  }
+
+  // Find the bib record id (b1234567) for a chunk of results markup. Sierra
+  // exposes it via the &quot;save&quot; checkbox, record= links, request links or the
+  // /.b1234567/ segment of its command URLs, depending on the template.
+  function bibIdIn(box) {
+    var cb = box.querySelector('input[name=&quot;save&quot;]');
+    if (cb &amp;&amp; BIB_RE.test(cb.value)) return cb.value;
+    var m = (box.innerHTML || '').match(/record=(b\d{5,9})/) || (box.innerHTML || '').match(/request~(b\d{5,9})/) || (box.innerHTML || '').match(/\/\.(b\d{5,9})\//);
+    return m ? m[1] : '';
+  }
+
+  function pickTitleAnchor(box) {
+    // Selector lists return document order, so check them in priority order.
+    var selectors = ['.briefcitTitle a', '.browseEntryData a', 'a[href*=&quot;frameset&quot;]', 'a[href*=&quot;record=b&quot;]', 'a[href*=&quot;/search&quot;]'];
+    for (var s = 0; s &lt; selectors.length; s++) {
+      var candidates = box.querySelectorAll(selectors[s]);
+      for (var i = 0; i &lt; candidates.length; i++) {
+        var a = candidates[i];
+        if (clean(a.textContent) &amp;&amp; !a.querySelector('img') &amp;&amp; !/request~b/.test(a.getAttribute('href') || '')) return a;
+      }
+    }
+    return null;
+  }
+
+  function fillFromBox(r, box) {
+    var detailEl = box.querySelector('.briefcitDetail') || box.querySelector('.browseEntryData');
+    var titleEl = box.querySelector('.briefcitTitle');
+    if (titleEl &amp;&amp; clean(titleEl.textContent)) r.title = clean(titleEl.textContent);
+    if (detailEl) {
+      var dl = lines(detailEl).filter(function (l) { return l !== r.title; });
+      r.author = dl[0] || '';
+      r.detail = dl.slice(1).join(' · ');
+    }
+    var statusEl = box.querySelector('.briefcitStatus');
+    // The status class may sit on the table itself or on a wrapper; try the
+    // innermost tables first so a layout table never wins over the real one.
+    var tables = Array.prototype.slice.call(box.querySelectorAll('table'));
+    if (statusEl &amp;&amp; statusEl.tagName === 'TABLE') tables.unshift(statusEl);
+    tables.sort(function (a, b) { return (a.querySelector('table') ? 1 : 0) - (b.querySelector('table') ? 1 : 0); });
+    for (var t = 0; t &lt; tables.length &amp;&amp; !r.holdings.length; t++) r.holdings = holdingsFromTable(tables[t]);
+    if (!r.holdings.length) {
+      var st = clean(textLines(statusEl || box)).match(STATUS_RE);
+      if (st) r.holdings.push({ location: '', call: '', extra: '', status: st[0] });
+    }
+    if (!detailEl) {
+      // Fallback: everything in the box that isn't the title, a status line or a button label.
+      var rest = lines(box).filter(function (l) { return l !== r.title &amp;&amp; !STATUS_RE.test(l) &amp;&amp; !/^(request|add to|save|export|location|call no|status)\b/i.test(l) &amp;&amp; l.length &gt; 2; });
+      r.author = rest[0] || '';
+      r.detail = rest.slice(1, 4).join(' · ');
+    }
+    var media = box.querySelector('.briefcitMedia, .briefcitFormat');
+    if (media &amp;&amp; clean(textLines(media))) r.format = clean(textLines(media));
+    var img = box.querySelector('img[src*=&quot;syndetics&quot;], img[src*=&quot;cover&quot;], img[src*=&quot;isbn&quot;], img[src*=&quot;openlibrary&quot;]');
+    if (img) r.cover = absolutize(img.getAttribute('src'));
+    var req = box.querySelector('a[href*=&quot;request~b&quot;]');
+    if (req) r.requestUrl = absolutize(req.getAttribute('href'));
+    else if (BIB_RE.test(r.id)) r.requestUrl = requestUrlFor(r.id);
+    return r;
+  }
+
+  function parseResults(doc, baseUrl) {
+    var results = [];
+    var seen = {};
+    function add(r) {
+      if (!r.title &amp;&amp; !r.id) return;
+      var key = r.id || r.url;
+      if (seen[key]) return;
+      seen[key] = true;
+      results.push(r);
+    }
+
+    var rows = doc.querySelectorAll('tr.briefCitRow, tr.browseEntry');
+    if (rows.length) {
+      for (var i = 0; i &lt; rows.length; i++) {
+        var box = rows[i];
+        var id = bibIdIn(box);
+        var ta = pickTitleAnchor(box);
+        var url = BIB_RE.test(id) ? recordUrl(id) : (ta ? absolutize(ta.getAttribute('href')) : '');
+        if (!url) continue;
+        add(fillFromBox({ id: id || url, title: ta ? clean(ta.textContent) : '', url: url, author: '', detail: '', holdings: [], cover: '', requestUrl: '' }, box));
+      }
+    } else {
+      // Unknown template: group record links by bib id and grow each link's
+      // container until it would swallow a different record.
+      var anchors = doc.querySelectorAll('a[href*=&quot;record=b&quot;]');
+      var byId = {};
+      for (var k = 0; k &lt; anchors.length; k++) {
+        var a = anchors[k];
+        var m = (a.getAttribute('href') || '').match(/record=(b\d{5,9})/);
+        if (!m) continue;
+        var text = clean(a.textContent);
+        if (byId[m[1]]) { if (!byId[m[1]].title &amp;&amp; text) byId[m[1]].title = text; continue; }
+        var r = fillFromBox({ id: m[1], title: text, url: recordUrl(m[1]), author: '', detail: '', holdings: [], cover: '', requestUrl: '' }, recordContainer(a, m[1], doc));
+        byId[m[1]] = r;
+        add(r);
+      }
+    }
+
+    var bodyText = clean(doc.body ? doc.body.textContent : '');
+    var totalMatch = bodyText.match(/(\d[\d,]*)\s+results?\s+found/i) || bodyText.match(/of\s+(\d[\d,]*)\s+(?:results|entries|titles)/i);
+    var total = totalMatch ? parseInt(totalMatch[1].replace(/,/g, ''), 10) : null;
+    if (!results.length &amp;&amp; /no (matches|entries|results) found|0 results found|no hits/i.test(bodyText)) total = 0;
+
+    var nextUrl = null;
+    var navLinks = doc.querySelectorAll('a[href]');
+    for (var n = 0; n &lt; navLinks.length; n++) {
+      var link = navLinks[n];
+      var label = clean(link.textContent) || clean(link.getAttribute('title')) || '';
+      var imgAlt = link.querySelector('img') ? clean(link.querySelector('img').getAttribute('alt')) : '';
+      if (/^next\b/i.test(label) || /^next\b/i.test(imgAlt) || link.rel === 'next') {
+        nextUrl = new URL(link.getAttribute('href'), baseUrl || location.href).href;
+        break;
+      }
+    }
+    return { results: results, total: total, nextUrl: nextUrl };
+  }
+
+  function looksLikeRecord(doc, url) {
+    return /record=b\d+/.test(url || '') ||
+      !!doc.querySelector('.bibInfoEntry, .bibItems, .bibInfoLabel, a[href*=&quot;marksave&quot;], a[href*=&quot;request~b&quot;]');
+  }
+
+  function parseRecord(doc, url) {
+    var html = doc.body ? doc.body.innerHTML : '';
+    var idm = (url || '').match(/record=b(\d{5,9})/) || html.match(/request~b(\d{5,9})/) || html.match(/\/\.b(\d{5,9})\//) || html.match(/marksave[^&quot;']*b(\d{5,9})/);
+    var id = idm ? 'b' + idm[1] : '';
+    var r = { id: id, title: '', author: '', detail: '', holdings: [], cover: '', requestUrl: '', url: id ? recordUrl(id) : url, fields: [], subjects: [], links: [] };
+
+    var rows = doc.querySelectorAll('tr');
+    for (var i = 0; i &lt; rows.length; i++) {
+      var l = rows[i].querySelector('.bibInfoLabel');
+      var d = rows[i].querySelector('.bibInfoData');
+      if (!l || !d) continue;
+      var label = clean(l.textContent).replace(/:$/, '');
+      var vals = lines(d);
+      if (!label || !vals.length) continue;
+      r.fields.push({ label: label, values: vals });
+      var ext = d.querySelectorAll('a[href^=&quot;http&quot;]');
+      for (var e = 0; e &lt; ext.length; e++) {
+        if (ext[e].hostname &amp;&amp; ext[e].hostname !== HOST) r.links.push({ text: clean(ext[e].textContent) || ext[e].hostname, href: ext[e].href });
+      }
+    }
+    r.fields.forEach(function (f) {
+      var L = f.label.toLowerCase();
+      if (!r.title &amp;&amp; /^(title|uniform title)/.test(L)) r.title = f.values[0];
+      else if (!r.author &amp;&amp; /^(author|creator|personal|corporate|main entry)/.test(L)) r.author = f.values[0];
+      else if (!r.detail &amp;&amp; /^(publi|imprint|published)/.test(L)) r.detail = f.values.join(' ');
+      else if (/^subject/.test(L)) r.subjects = r.subjects.concat(f.values);
+      else if (/isbn/.test(L) &amp;&amp; !r.cover) {
+        var isbn = (f.values.join(' ').match(/\b(97[89]\d{10}|\d{9}[\dXx])\b/) || [])[0];
+        if (isbn) r.cover = COVER_API + isbn + '-M.jpg?default=false';
+      }
+    });
+    if (!r.title) {
+      var h = doc.querySelector('.bibTitle, h1, h2');
+      r.title = h ? clean(h.textContent) : (id || 'Untitled record');
+    }
+    var items = doc.querySelectorAll('tr.bibItemsEntry');
+    if (items.length) r.holdings = holdingsFromTable(items[0].closest('table') || doc.body);
+    if (!r.holdings.length) {
+      var tables = doc.querySelectorAll('table');
+      for (var t = 0; t &lt; tables.length &amp;&amp; !r.holdings.length; t++) {
+        var head = clean(tables[t].textContent).toUpperCase();
+        if (head.indexOf('STATUS') !== -1 &amp;&amp; (head.indexOf('LOCATION') !== -1 || head.indexOf('CALL') !== -1)) r.holdings = holdingsFromTable(tables[t]);
+      }
+    }
+    var req = doc.querySelector('a[href*=&quot;request~b&quot;], form[action*=&quot;request~b&quot;]');
+    if (req) r.requestUrl = absolutize(req.getAttribute('href') || req.getAttribute('action'));
+    else if (id) r.requestUrl = requestUrlFor(id);
+    r.requestFound = !!req;
+    return r;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Persistence (Safari localStorage on library.metmuseum.org)
+  // ---------------------------------------------------------------------------
+
+  function load(key, fallback) {
+    try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* private mode */ }
+  }
+
+  var state = {
+    tab: 'search',
+    q: '',
+    field: FIELDS[0],
+    sort: SORTS[0].key,
+    results: [],
+    total: null,
+    nextUrl: null,
+    loading: false,
+    loadingMore: false,
+    error: null,
+    searched: false,
+    bag: load(STORE.bag, []),
+    requested: load(STORE.requested, []),
+    recent: load(STORE.recent, [])
+  };
+
+  function inBag(id) { return state.bag.some(function (b) { return b.id === id; }); }
+  function toggleBag(item) {
+    if (inBag(item.id)) {
+      state.bag = state.bag.filter(function (b) { return b.id !== item.id; });
+      toast('Removed from bag');
+    } else {
+      state.bag.push({ id: item.id, title: item.title, author: item.author, detail: item.detail, url: item.url, requestUrl: item.requestUrl || (BIB_RE.test(item.id) ? requestUrlFor(item.id) : ''), cover: item.cover });
+      toast('Added to bag');
+    }
+    save(STORE.bag, state.bag);
+    render();
+  }
+  function markRequested(item) {
+    state.bag = state.bag.filter(function (b) { return b.id !== item.id; });
+    state.requested = [{ id: item.id, title: item.title, author: item.author, url: item.url, at: Date.now() }]
+      .concat(state.requested.filter(function (x) { return x.id !== item.id; })).slice(0, 30);
+    save(STORE.bag, state.bag);
+    save(STORE.requested, state.requested);
+  }
+  function remember(q, fieldKey) {
+    state.recent = [{ q: q, field: fieldKey }].concat(state.recent.filter(function (r) { return !(r.q === q &amp;&amp; r.field === fieldKey); })).slice(0, 8);
+    save(STORE.recent, state.recent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+
+  var CSS = '\
+:host{all:initial;position:fixed;inset:0;z-index:2147483647;display:block}\
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}\
+.app{--red:#e4002b;--bg:#f6f5f2;--card:#fff;--fg:#141414;--muted:#6b6b6b;--line:#e3e1dc;--chip:#ecebe7;--ok:#1a7f4b;--busy:#b7791f;--note:#5b6b8a;--sheet:#fff;\
+ position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);\
+ font:16px/1.45 -apple-system,BlinkMacSystemFont,&quot;SF Pro Text&quot;,&quot;Helvetica Neue&quot;,Helvetica,Arial,sans-serif;overflow:hidden;\
+ padding-top:env(safe-area-inset-top);}\
+@media(prefers-color-scheme:dark){.app{--bg:#111;--card:#1c1c1e;--fg:#f2f2f2;--muted:#a0a0a0;--line:#2c2c2e;--chip:#2a2a2c;--sheet:#161616}}\
+.serif{font-family:&quot;New York&quot;,&quot;Iowan Old Style&quot;,&quot;Palatino&quot;,&quot;Georgia&quot;,serif}\
+button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer}\
+a{color:inherit}\
+.hdr{display:flex;align-items:center;gap:12px;padding:10px 16px 6px}\
+.hdr .brand{flex:1;min-width:0}\
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--red)}\
+.title{font-size:22px;font-weight:700;line-height:1.15;margin:0}\
+.iconbtn{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--chip);font-size:18px;flex:none}\
+.iconbtn:active{opacity:.7}\
+.searchbar{display:flex;gap:8px;padding:4px 16px 8px;align-items:center}\
+.searchbar .box{flex:1;min-width:0;display:flex;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:0 12px;height:46px;box-shadow:0 1px 2px rgba(0,0,0,.04)}\
+.searchbar input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:inherit;height:100%;-webkit-appearance:none;appearance:none}\
+.searchbar input::-webkit-search-cancel-button{display:none}\
+.searchbar .go{flex:none;background:var(--red);color:#fff;border-radius:12px;height:46px;padding:0 14px;font-weight:600}\
+.searchbar .clear{color:var(--muted);font-size:18px;padding:0 4px}\
+.seg{display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}\
+.seg::-webkit-scrollbar{display:none}\
+.seg button{white-space:nowrap;padding:6px 12px;border-radius:999px;background:var(--chip);font-size:14px;font-weight:500}\
+.seg button.on{background:var(--fg);color:var(--bg)}\
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 16px 24px}\
+.meta{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px;padding:2px 0 10px}\
+.meta .sorts button{margin-left:10px;font-weight:600;color:var(--muted)}\
+.meta .sorts button.on{color:var(--fg);text-decoration:underline;text-underline-offset:3px}\
+.card{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px;text-align:left;width:100%;align-items:flex-start}\
+.card:active{transform:scale(.995)}\
+.cover{width:52px;height:72px;border-radius:6px;background:var(--chip);flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--muted)}\
+.cover img{width:100%;height:100%;object-fit:cover;display:block}\
+.card .body{flex:1;min-width:0}\
+.card h3{margin:0 0 2px;font-size:17px;line-height:1.25;font-weight:600;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}\
+.sub{color:var(--muted);font-size:14px;margin:0 0 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}\
+.pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center}\
+.pill{font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--chip);color:var(--muted);letter-spacing:.01em}\
+.pill.ok{background:rgba(26,127,75,.12);color:var(--ok)}\
+.pill.busy{background:rgba(183,121,31,.14);color:var(--busy)}\
+.pill.note{background:rgba(91,107,138,.14);color:var(--note)}\
+.pill.call{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:500}\
+.bagbtn{width:36px;height:36px;border-radius:50%;background:var(--chip);flex:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600;align-self:center}\
+.bagbtn.on{background:var(--red);color:#fff}\
+.empty{padding:36px 8px;text-align:center;color:var(--muted)}\
+.empty h2{font-size:26px;color:var(--fg);margin:0 0 8px;line-height:1.2}\
+.empty p{margin:0 auto 18px;max-width:30em}\
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}\
+.chips button{padding:8px 14px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:14px}\
+.skeleton{height:96px;border-radius:16px;background:linear-gradient(90deg,var(--chip),var(--card),var(--chip));background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:10px}\
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}\
+.more{display:block;width:100%;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:600;margin:6px 0 20px}\
+.err{background:rgba(228,0,43,.08);border:1px solid rgba(228,0,43,.25);color:var(--red);border-radius:14px;padding:14px;margin:8px 0}\
+.err button{font-weight:700;text-decoration:underline;margin-left:8px}\
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--card);padding:6px 8px calc(6px + env(safe-area-inset-bottom))}\
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:600;color:var(--muted);padding:6px 0;position:relative}\
+.tabbar button.on{color:var(--red)}\
+.tabbar .ico{font-size:22px;line-height:1}\
+.badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0 5px}\
+.section{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}\
+.primary{display:block;width:100%;padding:15px;border-radius:14px;background:var(--red);color:#fff;font-weight:700;font-size:17px;text-align:center}\
+.primary:disabled{opacity:.5}\
+.secondary{display:block;width:100%;padding:13px;border-radius:14px;background:var(--chip);font-weight:600;text-align:center;margin-top:8px}\
+.row{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:8px}\
+.row .body{flex:1;min-width:0}\
+.row h4{margin:0;font-size:16px;font-weight:600;line-height:1.3}\
+.row .x{color:var(--muted);font-size:20px;padding:6px}\
+.sheet{position:absolute;inset:0;background:var(--sheet);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s cubic-bezier(.2,.8,.2,1);padding-top:env(safe-area-inset-top);will-change:transform}\
+.sheet.open{transform:none}\
+.sheet-head{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}\
+.sheet-head .t{flex:1;min-width:0;font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\
+.sheet-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}\
+.sheet-body.frame{padding:0;display:flex;flex-direction:column}\
+.banner{padding:12px 16px;font-size:14px;line-height:1.4;background:var(--chip);border-bottom:1px solid var(--line)}\
+.banner.ok{background:rgba(26,127,75,.12);color:var(--ok)}\
+.banner.warn{background:rgba(183,121,31,.14);color:var(--busy)}\
+iframe{flex:1;width:100%;border:0;background:#fff}\
+.detail h1{font-size:24px;line-height:1.2;margin:0 0 6px;font-weight:700}\
+.detail .by{font-size:16px;color:var(--muted);margin:0 0 14px}\
+.detail .hero{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}\
+.detail .hero .cover{width:84px;height:118px;font-size:30px}\
+.hold{display:flex;flex-direction:column;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:14px}\
+.hold b{font-weight:600}\
+dl{margin:0}\
+dt{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:12px}\
+dd{margin:2px 0 0;font-size:15px;line-height:1.45;overflow-wrap:anywhere}\
+.linklist a{display:block;padding:12px;border-radius:12px;background:var(--card);border:1px solid var(--line);margin-bottom:8px;text-decoration:none;font-weight:600}\
+.stepper{font-size:13px;color:var(--muted)}\
+.toast{position:absolute;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;white-space:nowrap}\
+.toast.show{opacity:1;transform:translate(-50%,0)}\
+.hint{font-size:13px;color:var(--muted);text-align:center;margin:14px 0 0}\
+';
+
+  var FRAME_CSS = '\
+html,body{max-width:100%!important;overflow-x:hidden!important}\
+body{margin:0!important;padding:12px 14px 40px!important;font-family:-apple-system,BlinkMacSystemFont,&quot;Helvetica Neue&quot;,Helvetica,Arial,sans-serif!important;font-size:16px!important;line-height:1.45!important;background:#fff!important;color:#111!important}\
+table{max-width:100%!important}\
+img{max-width:100%!important;height:auto!important}\
+input[type=text],input[type=password],input[type=number],input[type=tel],input:not([type]),select,textarea{font-size:16px!important;padding:10px 12px!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important;border:1px solid #bdbdbd!important;border-radius:10px!important;margin:4px 0 12px!important;background:#fff!important;-webkit-appearance:none!important}\
+input[type=submit],input[type=button],button{font-size:16px!important;font-weight:600!important;padding:12px 18px!important;border-radius:12px!important;background:#e4002b!important;color:#fff!important;border:0!important;-webkit-appearance:none!important;margin:6px 0!important}\
+a{color:#e4002b!important}\
+#topnav,.topnav,#navbar,.navbar,#banner,#pageBanner,#leftbar,#rightbar,#sidebar,#footer,.footer,#botlogo,#toplogo{display:none!important}\
+';
+
+  // Tiny DOM helper: el('div.card', {onclick: fn}, 'text', childEl, ...)
+  function el(spec, props) {
+    var parts = spec.split('.');
+    var node = document.createElement(parts[0] || 'div');
+    if (parts.length &gt; 1) node.className = parts.slice(1).join(' ');
+    var kids = Array.prototype.slice.call(arguments, 2);
+    if (props &amp;&amp; typeof props === 'object' &amp;&amp; !(props instanceof Node) &amp;&amp; !Array.isArray(props)) {
+      Object.keys(props).forEach(function (k) {
+        var v = props[k];
+        if (v == null || v === false) return;
+        if (k.slice(0, 2) === 'on') node.addEventListener(k.slice(2), v);
+        else if (k === 'html') node.innerHTML = v;
+        else if (k === 'style') node.style.cssText = v;
+        else if (k in node &amp;&amp; k !== 'list') { try { node[k] = v; } catch (e) { node.setAttribute(k, v); } }
+        else node.setAttribute(k, v);
+      });
+    } else if (props != null) {
+      kids.unshift(props);
+    }
+    (function append(list) {
+      list.forEach(function (k) {
+        if (k == null || k === false) return;
+        if (Array.isArray(k)) return append(k);
+        node.appendChild(k instanceof Node ? k : document.createTextNode(String(k)));
+      });
+    })(kids);
+    return node;
+  }
+
+  var host = el('div', { id: APP_ID });
+  var root = host.attachShadow({ mode: 'open' });
+  root.appendChild(el('style', CSS));
+  var app = el('div.app');
+  root.appendChild(app);
+
+  var headerEl = el('header.hdr');
+  var searchEl = el('div');
+  var mainEl = el('main');
+  var tabbarEl = el('nav.tabbar');
+  var sheetEl = el('div.sheet');
+  var toastEl = el('div.toast');
+  app.appendChild(headerEl); app.appendChild(searchEl); app.appendChild(mainEl); app.appendChild(tabbarEl); app.appendChild(sheetEl); app.appendChild(toastEl);
+
+  var savedOverflow = [document.documentElement.style.overflow, document.body.style.overflow];
+  function mount() {
+    var vp = document.querySelector('meta[name=&quot;viewport&quot;]');
+    if (!vp) { vp = document.createElement('meta'); vp.name = 'viewport'; document.head.appendChild(vp); }
+    vp.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(host);
+    document.addEventListener('keydown', onKey);
+  }
+  function unmount() {
+    document.removeEventListener('keydown', onKey);
+    document.documentElement.style.overflow = savedOverflow[0];
+    document.body.style.overflow = savedOverflow[1];
+    host.remove();
+  }
+  function onKey(e) { if (e.key === 'Escape') { if (sheetEl.classList.contains('open')) closeSheet(); else unmount(); } }
+
+  var toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 1600);
+  }
+
+  function coverEl(item, big) {
+    var box = el('div.cover' + (big ? '.big' : ''));
+    if (item.cover) {
+      var img = el('img', { src: item.cover, alt: '', loading: 'lazy' });
+      img.addEventListener('error', function () { img.remove(); box.textContent = monogram(item.title); });
+      box.appendChild(img);
+    } else {
+      box.textContent = monogram(item.title);
+    }
+    return box;
+  }
+  function monogram(title) {
+    var m = (title || '').replace(/^(the|a|an|le|la|les|der|die|das|el|los|las)\s+/i, '').match(/[A-Za-z0-9]/);
+    return m ? m[0].toUpperCase() : '·';
+  }
+
+  function holdingPills(item) {
+    var pills = el('div.pills');
+    var h = item.holdings[0];
+    if (!h) return pills;
+    if (h.status) pills.appendChild(el('span.pill.' + statusKind(h.status), h.status));
+    if (h.location) pills.appendChild(el('span.pill', h.location));
+    if (h.call) pills.appendChild(el('span.pill.call', h.call));
+    if (item.holdings.length &gt; 1) pills.appendChild(el('span.pill', '+' + (item.holdings.length - 1) + ' more'));
+    return pills;
+  }
+
+  // ---- header + search box -------------------------------------------------
+
+  function renderHeader() {
+    headerEl.innerHTML = '';
+    headerEl.appendChild(el('div.brand',
+      el('div.eyebrow', 'The Met'),
+      el('h1.title.serif', state.tab === 'bag' ? 'Your bag' : state.tab === 'account' ? 'My account' : 'Watson Library')));
+    headerEl.appendChild(el('button.iconbtn', { onclick: unmount, 'aria-label': 'Close' }, '✕'));
+  }
+
+  var inputEl;
+  function renderSearchBox() {
+    searchEl.innerHTML = '';
+    if (state.tab !== 'search') return;
+    inputEl = el('input', {
+      type: 'search', placeholder: 'Search books, catalogs, journals…', value: state.q,
+      enterkeyhint: 'search', autocapitalize: 'none', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false',
+      oninput: function () { state.q = inputEl.value; clearBtn.style.visibility = state.q ? 'visible' : 'hidden'; }
+    });
+    var clearBtn = el('button.clear', { type: 'button', 'aria-label': 'Clear', onclick: function () { state.q = ''; inputEl.value = ''; inputEl.focus(); clearBtn.style.visibility = 'hidden'; } }, '⨂');
+    clearBtn.style.visibility = state.q ? 'visible' : 'hidden';
+    var form = el('form.searchbar', { onsubmit: function (e) { e.preventDefault(); inputEl.blur(); runSearch(); } },
+      el('div.box', el('span', { style: 'color:var(--muted);margin-right:8px' }, '🔍'), inputEl, clearBtn),
+      el('button.go', { type: 'submit' }, 'Search'));
+    searchEl.appendChild(form);
+    searchEl.appendChild(el('div.seg', FIELDS.map(function (f) {
+      return el('button' + (state.field.key === f.key ? '.on' : ''), { type: 'button', onclick: function () { state.field = f; renderSearchBox(); if (state.searched &amp;&amp; state.q) runSearch(); } }, f.label);
+    })));
+  }
+
+  // ---- search results -------------------------------------------------------
+
+  var searchSeq = 0;
+  async function runSearch() {
+    var q = clean(state.q);
+    if (!q) return;
+    var seq = ++searchSeq;
+    state.searched = true; state.loading = true; state.error = null; state.results = []; state.total = null; state.nextUrl = null;
+    remember(q, state.field.key);
+    render();
+    try {
+      var page = await fetchDoc(searchUrl(q, state.field, state.sort));
+      if (seq !== searchSeq) return;
+      var parsed = parseResults(page.doc, page.url);
+      if (!parsed.results.length &amp;&amp; looksLikeRecord(page.doc, page.url)) {
+        // Sierra jumps straight to the record when a search has exactly one hit.
+        var rec = parseRecord(page.doc, page.url);
+        parsed = { results: [rec], total: 1, nextUrl: null };
+      }
+      state.results = parsed.results; state.total = parsed.total; state.nextUrl = parsed.nextUrl;
+      state.lastUrl = page.url;
+    } catch (e) {
+      if (seq !== searchSeq) return;
+      state.error = e &amp;&amp; e.name === 'AbortError' ? 'Watsonline took too long to answer.' : ('Couldn’t reach Watsonline. ' + (e &amp;&amp; e.message ? e.message : ''));
+    }
+    state.loading = false;
+    render();
+  }
+
+  async function loadMore() {
+    if (!state.nextUrl || state.loadingMore) return;
+    var seq = searchSeq;
+    state.loadingMore = true; render();
+    try {
+      var page = await fetchDoc(state.nextUrl);
+      if (seq !== searchSeq) return;
+      var parsed = parseResults(page.doc, page.url);
+      var seen = {};
+      state.results.forEach(function (r) { seen[r.id] = true; });
+      parsed.results.forEach(function (r) { if (!seen[r.id]) state.results.push(r); });
+      state.nextUrl = parsed.nextUrl &amp;&amp; parsed.nextUrl !== state.nextUrl ? parsed.nextUrl : null;
+      if (!parsed.results.length) state.nextUrl = null;
+    } catch (e) {
+      toast('Couldn’t load more');
+    }
+    state.loadingMore = false; render();
+  }
+
+  function resultCard(item) {
+    var bagBtn = el('button.bagbtn' + (inBag(item.id) ? '.on' : ''), {
+      type: 'button', 'aria-label': inBag(item.id) ? 'Remove from bag' : 'Add to bag',
+      onclick: function (e) { e.stopPropagation(); toggleBag(item); }
+    }, inBag(item.id) ? '✓' : '+');
+    var sub = [item.author, item.detail].filter(Boolean).join(' · ');
+    return el('button.card', { type: 'button', onclick: function () { openDetail(item); } },
+      coverEl(item),
+      el('div.body', el('h3.serif', item.title || 'Untitled'), sub ? el('p.sub', sub) : null, holdingPills(item)),
+      bagBtn);
+  }
+
+  function renderSearchTab() {
+    if (!state.searched) {
+      var empty = el('div.empty',
+        el('h2.serif', 'Search the Met’s art library'),
+        el('p', 'Over a million volumes on art and archaeology. Find something, add it to your bag, then check out to have it paged for your visit to Watson Library.'));
+      if (state.recent.length) {
+        empty.appendChild(el('div.section', 'Recent'));
+        empty.appendChild(el('div.chips', state.recent.map(function (r) {
+          var f = FIELDS.filter(function (x) { return x.key === r.field; })[0] || FIELDS[0];
+          return el('button', { type: 'button', onclick: function () { state.q = r.q; state.field = f; renderSearchBox(); runSearch(); } }, (f.prefix ? f.label + ': ' : '') + r.q);
+        })));
+      } else {
+        empty.appendChild(el('div.chips', ['Vermeer', 'Japanese prints', 'Costume Institute', 'Islamic calligraphy'].map(function (s) {
+          return el('button', { type: 'button', onclick: function () { state.q = s; renderSearchBox(); runSearch(); } }, s);
+        })));
+      }
+      mainEl.appendChild(empty);
+      return;
+    }
+    if (state.loading) {
+      mainEl.appendChild(el('div.meta', el('span', 'Searching Watsonline…')));
+      for (var i = 0; i &lt; 5; i++) mainEl.appendChild(el('div.skeleton'));
+      return;
+    }
+    if (state.error) {
+      mainEl.appendChild(el('div.err', state.error, el('button', { type: 'button', onclick: runSearch }, 'Retry')));
+      return;
+    }
+    var countText = state.total != null ? state.total.toLocaleString() + (state.total === 1 ? ' result' : ' results') : state.results.length + ' shown';
+    mainEl.appendChild(el('div.meta', el('span', countText),
+      el('span.sorts', SORTS.map(function (s) {
+        return el('button' + (state.sort === s.key ? '.on' : ''), { type: 'button', onclick: function () { if (state.sort !== s.key) { state.sort = s.key; runSearch(); } } }, s.label);
+      }))));
+    if (!state.results.length) {
+      mainEl.appendChild(el('div.empty', el('h2.serif', 'Nothing found'),
+        el('p', state.total ? 'Watsonline returned results in a layout this app couldn’t read.' : 'Try fewer words, a different spelling, or search Everything instead of a single field.'),
+        state.lastUrl ? el('div.linklist', el('a', { href: state.lastUrl, target: '_blank', rel: 'noopener' }, 'Open this search on Watsonline ↗')) : null));
+      return;
+    }
+    state.results.forEach(function (r) { mainEl.appendChild(resultCard(r)); });
+    if (state.nextUrl) {
+      var more = el('button.more', { type: 'button', onclick: loadMore, disabled: state.loadingMore }, state.loadingMore ? 'Loading…' : 'Load more');
+      mainEl.appendChild(more);
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) { io.disconnect(); loadMore(); } }, { root: mainEl, rootMargin: '400px' });
+        io.observe(more);
+      }
+    }
+  }
+
+  // ---- bag ------------------------------------------------------------------
+
+  function renderBagTab() {
+    if (!state.bag.length &amp;&amp; !state.requested.length) {
+      mainEl.appendChild(el('div.empty', el('h2.serif', 'Your bag is empty'),
+        el('p', 'Tap + on any result to collect items, then check out to request them all at once.'),
+        el('div.chips', el('button', { type: 'button', onclick: function () { setTab('search'); } }, 'Start searching'))));
+      return;
+    }
+    if (state.bag.length) {
+      mainEl.appendChild(el('div.section', state.bag.length + (state.bag.length === 1 ? ' item' : ' items')));
+      state.bag.forEach(function (b) {
+        mainEl.appendChild(el('div.row',
+          coverEl(b),
+          el('div.body', el('h4.serif', b.title), el('p.sub', [b.author, b.detail].filter(Boolean).join(' · '))),
+          el('button.x', { type: 'button', 'aria-label': 'Remove', onclick: function () { toggleBag(b); } }, '✕')));
+      });
+      mainEl.appendChild(el('button.primary', { type: 'button', onclick: function () { startCheckout(); } }, 'Check out · request ' + state.bag.length + (state.bag.length === 1 ? ' item' : ' items')));
+      mainEl.appendChild(el('p.hint', 'Requested books are paged to Watson Library’s reading room for your visit. Nothing leaves the building.'));
+    }
+    if (state.requested.length) {
+      mainEl.appendChild(el('div.section', 'Recently requested'));
+      state.requested.forEach(function (r) {
+        mainEl.appendChild(el('div.row', el('div.body', el('h4.serif', r.title), el('p.sub', new Date(r.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + (r.author ? ' · ' + r.author : ''))),
+          el('a', { href: r.url, target: '_blank', rel: 'noopener', style: 'color:var(--muted);font-size:13px;text-decoration:none' }, 'Record ↗')));
+      });
+      mainEl.appendChild(el('button.secondary', { type: 'button', onclick: function () { state.requested = []; save(STORE.requested, []); render(); } }, 'Clear history'));
+    }
+  }
+
+  // ---- account --------------------------------------------------------------
+
+  function renderAccountTab() {
+    mainEl.appendChild(el('div.empty', el('h2.serif', 'Your Watsonline account'),
+      el('p', 'See what you have checked out, your holds, saved searches and reading history. Sign in with your last name and the last 6 digits of your library barcode.'),
+      el('div.chips',
+        el('button', { type: 'button', onclick: function () { openFrameSheet('My account', ACCOUNT_URL, { logout: true }); } }, 'Open my account'),
+        el('button', { type: 'button', onclick: function () { openFrameSheet('Sign out', LOGOUT_URL, {}); } }, 'Sign out'))));
+    mainEl.appendChild(el('p.hint', 'Library cards are issued at the Watson Library desk; visitors 18+ are welcome.'));
+  }
+
+  // ---- tabs + render --------------------------------------------------------
+
+  function setTab(tab) { state.tab = tab; mainEl.scrollTop = 0; render(); }
+
+  function renderTabbar() {
+    tabbarEl.innerHTML = '';
+    [['search', '🔍', 'Search'], ['bag', '👜', 'Bag'], ['account', '👤', 'Account']].forEach(function (t) {
+      var b = el('button' + (state.tab === t[0] ? '.on' : ''), { type: 'button', onclick: function () { setTab(t[0]); } }, el('span.ico', t[1]), t[2]);
+      if (t[0] === 'bag' &amp;&amp; state.bag.length) b.appendChild(el('span.badge', String(state.bag.length)));
+      tabbarEl.appendChild(b);
+    });
+  }
+
+  function render() {
+    var scroll = mainEl.scrollTop;
+    renderHeader();
+    renderSearchBox();
+    mainEl.innerHTML = '';
+    if (state.tab === 'search') renderSearchTab();
+    else if (state.tab === 'bag') renderBagTab();
+    else renderAccountTab();
+    renderTabbar();
+    mainEl.scrollTop = scroll;
+  }
+
+  // ---- sheets ---------------------------------------------------------------
+
+  function closeSheet() {
+    sheetEl.classList.remove('open');
+    setTimeout(function () { if (!sheetEl.classList.contains('open')) sheetEl.innerHTML = ''; }, 300);
+    render();
+  }
+  function openSheet(headChildren, body) {
+    sheetEl.innerHTML = '';
+    sheetEl.appendChild(el('div.sheet-head', headChildren));
+    sheetEl.appendChild(body);
+    requestAnimationFrame(function () { sheetEl.classList.add('open'); });
+  }
+
+  async function openDetail(item) {
+    var body = el('div.sheet-body.detail');
+    var bagBtn = el('button.secondary', { type: 'button', onclick: function () { toggleBag(item); bagBtn.textContent = inBag(item.id) ? '✓ In your bag' : '+ Add to bag'; } }, inBag(item.id) ? '✓ In your bag' : '+ Add to bag');
+    openSheet([
+      el('button.iconbtn', { type: 'button', 'aria-label': 'Back', onclick: closeSheet }, '←'),
+      el('div.t', item.title),
+      el('a.iconbtn', { href: item.url, target: '_blank', rel: 'noopener', 'aria-label': 'Open on Watsonline', style: 'text-decoration:none' }, '↗')
+    ], body);
+
+    function paint(rec, loading) {
+      body.innerHTML = '';
+      body.appendChild(el('div.hero', coverEl(rec, true), el('div', { style: 'flex:1;min-width:0' },
+        el('h1.serif', rec.title), rec.author ? el('p.by', rec.author) : null, rec.detail ? el('p.sub', rec.detail) : null)));
+      var canRequest = rec.requestFound !== false || !rec.fields;
+      body.appendChild(el('button.primary', { type: 'button', disabled: loading, onclick: function () { startCheckout([rec]); } }, loading ? 'Loading…' : 'Request this item'));
+      body.appendChild(bagBtn);
+      if (!canRequest) body.appendChild(el('p.hint', 'Watsonline didn’t show a Request button for this record; it may be online-only or non-requestable. You can still try.'));
+      body.appendChild(el('div.section', 'Copies'));
+      if (loading &amp;&amp; !rec.holdings.length) body.appendChild(el('div.skeleton', { style: 'height:56px' }));
+      else if (!rec.holdings.length) body.appendChild(el('p.sub', 'No item information found.'));
+      rec.holdings.forEach(function (h) {
+        body.appendChild(el('div.hold',
+          el('div.pills', h.status ? el('span.pill.' + statusKind(h.status), h.status) : null, h.extra ? el('span.pill', h.extra) : null),
+          h.location ? el('div', el('b', 'Location '), h.location) : null,
+          h.call ? el('div', el('b', 'Call number '), el('span', { style: 'font-family:ui-monospace,Menlo,monospace' }, h.call)) : null));
+      });
+      if (rec.links &amp;&amp; rec.links.length) {
+        body.appendChild(el('div.section', 'Online'));
+        body.appendChild(el('div.linklist', rec.links.map(function (l) { return el('a', { href: l.href, target: '_blank', rel: 'noopener' }, l.text + ' ↗'); })));
+      }
+      if (rec.subjects &amp;&amp; rec.subjects.length) {
+        body.appendChild(el('div.section', 'Subjects'));
+        body.appendChild(el('div.pills', rec.subjects.map(function (s) {
+          return el('button.pill', { type: 'button', onclick: function () { closeSheet(); state.q = s.split(/\s+--\s+/)[0]; state.field = FIELDS[3]; setTab('search'); renderSearchBox(); runSearch(); } }, s);
+        })));
+      }
+      if (rec.fields &amp;&amp; rec.fields.length) {
+        var dl = el('dl');
+        rec.fields.forEach(function (f) {
+          if (/^(subject|title|author)/i.test(f.label)) return;
+          dl.appendChild(el('dt', f.label));
+          f.values.forEach(function (v) { dl.appendChild(el('dd', v)); });
+        });
+        body.appendChild(el('div.section', 'Details'));
+        body.appendChild(dl);
+      }
+    }
+
+    paint(item, !item.fields);
+    if (item.fields) return;
+    try {
+      var page = await fetchDoc(item.url);
+      var rec = parseRecord(page.doc, page.url);
+      ['title', 'author', 'detail', 'cover'].forEach(function (k) { if (!rec[k] &amp;&amp; item[k]) rec[k] = item[k]; });
+      if (!rec.holdings.length) rec.holdings = item.holdings;
+      if (!BIB_RE.test(rec.id)) rec.id = item.id;
+      if (!rec.requestUrl) rec.requestUrl = item.requestUrl;
+      Object.assign(item, rec);
+      paint(item, false);
+    } catch (e) {
+      paint(item, false);
+      body.insertBefore(el('div.err', 'Couldn’t load the full record. ' + (e.message || '')), body.firstChild);
+    }
+  }
+
+  function tidyFrame(iframe) {
+    try {
+      var d = iframe.contentDocument;
+      if (!d || !d.head) return null;
+      if (!d.querySelector('meta[name=&quot;viewport&quot;]')) {
+        var m = d.createElement('meta'); m.name = 'viewport'; m.content = 'width=device-width, initial-scale=1'; d.head.appendChild(m);
+      }
+      var s = d.createElement('style'); s.textContent = FRAME_CSS; d.head.appendChild(s);
+      return d;
+    } catch (e) { return null; }
+  }
+
+  function frameState(d) {
+    var t = clean(d.body ? d.body.textContent : '');
+    if (/was successful|successfully (placed|requested|submitted)|request has been (placed|received|submitted)|your request for .* was/i.test(t)) return 'success';
+    if (d.querySelector('input[name=&quot;code&quot;], input[name=&quot;pin&quot;], input[name=&quot;password&quot;], input[type=&quot;password&quot;], form[action*=&quot;cas/login&quot;]')) return 'login';
+    if (/not requestable|cannot be requested|can not be requested|no items? (are )?available|unable to (place|process)|already (have|requested|placed)|not eligible|exceeds/i.test(t)) return 'problem';
+    return 'form';
+  }
+
+  function setBanner(banner, cls, text, url) {
+    banner.className = 'banner' + (cls ? ' ' + cls : '');
+    banner.innerHTML = '';
+    banner.appendChild(document.createTextNode(text + ' '));
+    if (url) banner.appendChild(el('a', { href: url, target: '_blank', rel: 'noopener', style: 'font-weight:600;white-space:nowrap' }, 'Open in Watsonline ↗'));
+  }
+
+  function openFrameSheet(title, url, opts) {
+    var banner = el('div.banner');
+    setBanner(banner, '', 'Loading Watsonline…', url);
+    var iframe = el('iframe', { src: url, title: title });
+    var body = el('div.sheet-body.frame', banner, iframe);
+    var head = [el('button.iconbtn', { type: 'button', 'aria-label': 'Close', onclick: closeSheet }, '✕'), el('div.t', title)];
+    if (opts &amp;&amp; opts.logout) head.push(el('button.iconbtn', { type: 'button', 'aria-label': 'Sign out', title: 'Sign out', onclick: function () { iframe.src = LOGOUT_URL; } }, '⎋'));
+    openSheet(head, body);
+    iframe.addEventListener('load', function () {
+      var d = tidyFrame(iframe);
+      if (!d) { setBanner(banner, 'warn', 'Watsonline wouldn’t load inside this sheet.', url); return; }
+      var st = frameState(d);
+      if (st === 'login') setBanner(banner, '', 'Sign in with your last name and the last 6 digits of your library barcode.', url);
+      else if (/logout/.test(iframe.src)) setBanner(banner, 'ok', 'You’re signed out.', '');
+      else setBanner(banner, '', 'Your Watsonline account.', url);
+    });
+  }
+
+  // ---- checkout (request) flow ---------------------------------------------
+
+  function startCheckout(items) {
+    var queue = (items || state.bag).slice();
+    if (!queue.length) return;
+    var index = 0;
+    var outcome = {};
+
+    var banner = el('div.banner');
+    var iframe = el('iframe', { title: 'Watsonline request' });
+    var titleEl = el('div.t');
+    var stepEl = el('div.stepper');
+    var body = el('div.sheet-body.frame', banner, iframe);
+    var nextBtn = el('button.iconbtn', { type: 'button', 'aria-label': 'Skip', title: 'Skip this item', onclick: function () { outcome[queue[index].id] = outcome[queue[index].id] || 'skipped'; advance(); } }, '⏭');
+    openSheet([
+      el('button.iconbtn', { type: 'button', 'aria-label': 'Close', onclick: closeSheet }, '✕'),
+      el('div', { style: 'flex:1;min-width:0' }, titleEl, stepEl),
+      nextBtn
+    ], body);
+
+    function currentUrl() {
+      var item = queue[index];
+      // Without a bib id we can't build the request URL; fall back to the
+      // record page, which carries Watsonline's own Request button.
+      return item.requestUrl || (BIB_RE.test(item.id) ? requestUrlFor(item.id) : item.url);
+    }
+
+    function show() {
+      var item = queue[index];
+      titleEl.textContent = item.title;
+      stepEl.textContent = 'Checkout · ' + (index + 1) + ' of ' + queue.length;
+      setBanner(banner, '', 'Loading request form…', currentUrl());
+      iframe.src = currentUrl();
+    }
+
+    function advance() {
+      index++;
+      if (index &lt; queue.length) { show(); return; }
+      summary();
+    }
+
+    function summary() {
+      var ok = queue.filter(function (q) { return outcome[q.id] === 'success'; });
+      var rest = queue.filter(function (q) { return outcome[q.id] !== 'success'; });
+      var sb = el('div.sheet-body',
+        el('h1.serif', { style: 'font-size:26px;margin:8px 0 6px' }, ok.length ? 'Requested ' + ok.length + (ok.length === 1 ? ' item' : ' items') : 'No requests placed'),
+        el('p.sub', ok.length ? 'Watson Library will page these for you. Check the paging schedule for when they’ll be ready in the reading room.' : 'Nothing was confirmed by Watsonline.'));
+      if (ok.length) { sb.appendChild(el('div.section', 'Requested')); ok.forEach(function (q) { sb.appendChild(el('div.row', el('div.body', el('h4.serif', q.title)), el('span.pill.ok', '✓'))); }); }
+      if (rest.length) { sb.appendChild(el('div.section', 'Still in your bag')); rest.forEach(function (q) { sb.appendChild(el('div.row', el('div.body', el('h4.serif', q.title)), el('span.pill.busy', outcome[q.id] || 'skipped'))); }); }
+      sb.appendChild(el('button.primary', { type: 'button', style: 'margin-top:20px', onclick: function () { closeSheet(); setTab('bag'); } }, 'Done'));
+      sheetEl.innerHTML = '';
+      sheetEl.appendChild(el('div.sheet-head', el('div.t', 'Checkout complete')));
+      sheetEl.appendChild(sb);
+    }
+
+    iframe.addEventListener('load', function () {
+      var item = queue[index];
+      if (!item) return;
+      var d = tidyFrame(iframe);
+      if (!d) { setBanner(banner, 'warn', 'Watsonline wouldn’t load inside this sheet. Request it there, then tap ⏭.', currentUrl()); return; }
+      var st = frameState(d);
+      if (st === 'success') {
+        if (outcome[item.id] !== 'success') {
+          outcome[item.id] = 'success';
+          markRequested(item);
+          setBanner(banner, 'ok', '✓ Requested. ' + (index + 1 &lt; queue.length ? 'Next item in a moment…' : 'Wrapping up…'), '');
+          setTimeout(advance, 1400);
+        }
+      } else if (st === 'login') {
+        setBanner(banner, '', 'Sign in to place the request: last name + last 6 digits of your library barcode.', currentUrl());
+      } else if (st === 'problem') {
+        outcome[item.id] = 'not requestable';
+        setBanner(banner, 'warn', 'Watsonline couldn’t take this request. Tap ⏭ to skip it.', currentUrl());
+      } else {
+        setBanner(banner, '', 'Choose a pickup location if asked, then submit the request.', currentUrl());
+      }
+    });
+    show();
+  }
+
+  // ---------------------------------------------------------------------------
+
+  mount();
+  render();
+  if (!state.searched &amp;&amp; inputEl) setTimeout(function () { try { inputEl.focus(); } catch (e) { /* ignore */ } }, 350);
+  finish();
+})();
+</textarea></details>
+      </li>
+      <li>Tap the shortcut's name at the top → <b>Rename</b> it “Watson Library”, then open its details (ⓘ) and turn on <b>Show in Share Sheet</b>. Under <b>Share Sheet Types</b> keep only <b>Safari web pages</b>.</li>
+      <li>In Safari, open <a href="https://library.metmuseum.org">library.metmuseum.org</a>, tap the <b>Share</b> button and choose <b>Watson Library</b>.</li>
+    </ol>
+    <p class="muted">Run it from any other page and it simply sends you to Watsonline first; run it again once the page has loaded. You can also download the script as <a href="./shortcut.js">shortcut.js</a>.</p>
+  </div>
+
+  <h2>2 · …or as a Safari bookmarklet</h2>
+  <p>On a Mac, drag either button to the bookmarks bar. On an iPhone: bookmark any page, then <b>Edit</b> the bookmark and replace its address with the copied link.</p>
+  <div class="card">
+    <h3>Loader (recommended)</h3>
+    <p class="muted">Tiny bookmark that pulls the latest <code>app.js</code> from this page every time, so you always get updates.</p>
+    <p><a class="btn" href="javascript:(function()%7Bif(location.hostname!%3D%3D'library.metmuseum.org')%7Blocation.href%3D'https%3A%2F%2Flibrary.metmuseum.org%2F'%3Breturn%7Dvar%20s%3Ddocument.createElement('script')%3Bs.src%3D'https%3A%2F%2Fcwervo.github.io%2Fbookmarklets%2Fmet-library%2Fapp.js%3F'%2BDate.now()%3Bdocument.documentElement.appendChild(s)%7D)()">Watson Library</a> <button class="btn ghost" type="button" data-copy="javascript:(function()%7Bif(location.hostname!%3D%3D'library.metmuseum.org')%7Blocation.href%3D'https%3A%2F%2Flibrary.metmuseum.org%2F'%3Breturn%7Dvar%20s%3Ddocument.createElement('script')%3Bs.src%3D'https%3A%2F%2Fcwervo.github.io%2Fbookmarklets%2Fmet-library%2Fapp.js%3F'%2BDate.now()%3Bdocument.documentElement.appendChild(s)%7D)()">Copy link</button></p>
+    <h3>Self-contained</h3>
+    <p class="muted">The whole app inside the bookmark (49 KB). Works even if this page goes away; update it by hand.</p>
+    <p><a class="btn alt" href="javascript:(function()%7B%22use%20strict%22%3Bvar%20e%3D%22library.metmuseum.org%22%2Ct%3D%22watson-app-host%22%2Cn%3D%22watson.bag%22%2Cr%3D%22watson.recent%22%2Ci%3D%22watson.requested%22%3Bfunction%20o()%7Btry%7B%22function%22%3D%3Dtypeof%20completion%26%26completion()%7Dcatch(e)%7B%7D%7Dif(location.hostname!%3D%3De)return%20location.href%3D%22https%3A%2F%2F%22%2Be%2B%22%2F%22%2Cvoid%20o()%3Bvar%20a%3Ddocument.getElementById(t)%3Ba%26%26a.remove()%3Bvar%20l%3Dlocation.pathname.match(%2F~S(%5Cd%2B)%2F)%2Cs%3Dl%3Fl%5B1%5D%3A%221%22%2Cd%3D%22~S%22%2Bs%2Cc%3Dlocation.origin%2Cp%3D%5B%7Bkey%3A%22X%22%2Clabel%3A%22Everything%22%2Cprefix%3A%22%22%7D%2C%7Bkey%3A%22t%22%2Clabel%3A%22Title%22%2Cprefix%3A%22t%3A%22%7D%2C%7Bkey%3A%22a%22%2Clabel%3A%22Author%22%2Cprefix%3A%22a%3A%22%7D%2C%7Bkey%3A%22d%22%2Clabel%3A%22Subject%22%2Cprefix%3A%22d%3A%22%7D%5D%2Cu%3D%5B%7Bkey%3A%22R%22%2Clabel%3A%22Relevance%22%7D%2C%7Bkey%3A%22D%22%2Clabel%3A%22Date%22%7D%5D%3Bfunction%20f(e)%7Breturn%20c%2B%22%2Frecord%3D%22%2Be%2Bd%7Dfunction%20h(e)%7Breturn%20c%2B%22%2Fsearch%22%2Bd%2B%22%3F%2F.%22%2Be%2B%22%2F.%22%2Be%2B%22%2F1%2C1%2C1%2CB%2Frequest~%22%2Be%7Dvar%20b%3Dc%2B%22%2Fpatroninfo%22%2Bd%2B%22%2F%22%2Cg%3Dc%2B%22%2Flogout%22%2Bd%2B%22%3F%22%3Bfunction%20m(e)%7Btry%7Breturn%20new%20URL(e%2Clocation.href).href%7Dcatch(t)%7Breturn%20e%7D%7Dfunction%20v(e)%7Breturn(e%7C%7C%22%22).replace(%2F%C2%A0%2Fg%2C%22%20%22).replace(%2F%5Cs%2B%2Fg%2C%22%20%22).trim()%7Dfunction%20x(e)%7Bvar%20t%3D%22%22%3Breturn%20function%20e(n)%7Bfor(var%20r%3Dn.firstChild%3Br%3Br%3Dr.nextSibling)if(3!%3D%3Dr.nodeType)%7Bif(1%3D%3D%3Dr.nodeType)%7Bvar%20i%3Dr.tagName%3Bif(%22SCRIPT%22!%3D%3Di%26%26%22STYLE%22!%3D%3Di)if(%22BR%22!%3D%3Di)%7Bvar%20o%3D%2F%5E(DIV%7CP%7CTR%7CLI%7CTABLE%7CUL%7COL%7CDD%7CDT%7CH%5B1-6%5D)%24%2F.test(i)%3Bo%26%26(t%2B%3D%22%5Cn%22)%2Ce(r)%2Co%26%26(t%2B%3D%22%5Cn%22)%7Delse%20t%2B%3D%22%5Cn%22%7D%7Delse%20t%2B%3Dr.nodeValue%7D(e)%2Ct%7Dfunction%20y(e)%7Breturn%20x(e).split(%22%5Cn%22).map(v).filter(Boolean)%7Dasync%20function%20w(e)%7Bvar%20t%3D%22undefined%22!%3Dtypeof%20AbortController%3Fnew%20AbortController%3Anull%2Cn%3Dt%3FsetTimeout(function()%7Bt.abort()%7D%2C2e4)%3Anull%3Btry%7Bvar%20r%3Dawait%20fetch(e%2C%7Bcredentials%3A%22same-origin%22%2Csignal%3At%3Ft.signal%3Avoid%200%7D)%3Bif(!r.ok)throw%20new%20Error(%22Watsonline%20answered%20with%20status%20%22%2Br.status)%3Bvar%20i%3Dawait%20r.text()%3Breturn%7Bdoc%3A(new%20DOMParser).parseFromString(i%2C%22text%2Fhtml%22)%2Curl%3Ar.url%7C%7Ce%7D%7Dfinally%7Bn%26%26clearTimeout(n)%7D%7Dfunction%20k(e%2Ct%2Cn)%7Bfor(var%20r%3De%3Br.parentElement%26%26r.parentElement!%3D%3Dn%26%26r.parentElement!%3D%3Dn.body%3B)%7Bfor(var%20i%3Dr.parentElement%2Co%3Di.querySelectorAll('a%5Bhref*%3D%22record%3Db%22%5D')%2Ca%3D!1%2Cl%3D0%3Bl%3Co.length%3Bl%2B%2B)if(-1%3D%3D%3D(o%5Bl%5D.getAttribute(%22href%22)%7C%7C%22%22).indexOf(%22record%3D%22%2Bt))%7Ba%3D!0%3Bbreak%7Dif(a)break%3Br%3Di%7Dreturn%20r%7Dvar%20C%3D%2F%5Cb(AVAILABLE%7CCHECKED%20OUT%7CIN%20LIBRARY%7CLIB%20USE%20ONLY%7CLIBRARY%20USE%20ONLY%7CIN%20PROCESS%7CON%20HOLD%7CON%20ORDER%7CDUE%20%5Cd%5Cd-%5Cd%5Cd-%5Cd%5Cd%7CMISSING%7CLOST%7CNON-CIRC%7CNON-CIRCULATING%7CONLINE%7CIN%20TRANSIT%7CBEING%20PAGED%7CASK%20AT%20DESK%7CON%20RESERVE%7CSTORAGE%7COFFSITE)%5Cb%2F%2Cq%3D%2F%5Eb%5Cd%7B5%2C9%7D%24%2F%3Bfunction%20S(e)%7Breturn(e%3D(e%7C%7C%22%22).toUpperCase())%3F%2FAVAILABLE%7CIN%20LIBRARY%7CASK%20AT%20DESK%2F.test(e)%3F%22ok%22%3A%2FLIB%20USE%7CLIBRARY%20USE%7CNON-CIRC%7CONLINE%7CON%20RESERVE%7CSTORAGE%7COFFSITE%2F.test(e)%3F%22note%22%3A%2FCHECKED%20OUT%7CDUE%7CIN%20PROCESS%7CON%20HOLD%7CON%20ORDER%7CMISSING%7CLOST%7CIN%20TRANSIT%7CBEING%20PAGED%2F.test(e)%3F%22busy%22%3A%22%22%3A%22%22%7Dfunction%20E(e)%7Bvar%20t%3D%5B%5D%3Bif(!function(e)%7Bif(e.querySelector(%22tr.bibItemsEntry%22))return!0%3Bvar%20t%3De.querySelector(%22tr%22)%2Cn%3Dt%3Fv(t.textContent).toUpperCase()%3A%22%22%3Breturn%2FSTATUS%2F.test(n)%26%26%2FLOCATION%7CCALL%2F.test(n)%7D(e))return%20t%3Bfor(var%20n%3De.querySelectorAll(%22tr%22)%2Cr%3D0%3Br%3Cn.length%3Br%2B%2B)%7Bvar%20i%3Dn%5Br%5D.querySelectorAll(%22td%22)%3Bif(!(i.length%3C2))%7Bfor(var%20o%3D%5B%5D%2Ca%3D0%3Ba%3Ci.length%3Ba%2B%2B)o.push(v(x(i%5Ba%5D)))%3Bfor(var%20l%3D%22%22%2Cs%3Do.length-1%3Bs%3E%3D0%3Bs--)if(o%5Bs%5D.length%3C%3D40%26%26C.test(o%5Bs%5D))%7Bl%3Do%5Bs%5D%2Co.splice(s%2C1)%3Bbreak%7D(l%7C%7Cn%5Br%5D.classList.contains(%22bibItemsEntry%22))%26%26t.push(%7Blocation%3Ao%5B0%5D%7C%7C%22%22%2Ccall%3Ao%5B1%5D%7C%7C%22%22%2Cextra%3Ao.slice(2).join(%22%20%C2%B7%20%22)%2Cstatus%3Al%7D)%7D%7Dreturn%20t%7Dfunction%20L(e)%7Bvar%20t%3De.querySelector('input%5Bname%3D%22save%22%5D')%3Bif(t%26%26q.test(t.value))return%20t.value%3Bvar%20n%3D(e.innerHTML%7C%7C%22%22).match(%2Frecord%3D(b%5Cd%7B5%2C9%7D)%2F)%7C%7C(e.innerHTML%7C%7C%22%22).match(%2Frequest~(b%5Cd%7B5%2C9%7D)%2F)%7C%7C(e.innerHTML%7C%7C%22%22).match(%2F%5C%2F%5C.(b%5Cd%7B5%2C9%7D)%5C%2F%2F)%3Breturn%20n%3Fn%5B1%5D%3A%22%22%7Dfunction%20A(e)%7Bfor(var%20t%3D%5B%22.briefcitTitle%20a%22%2C%22.browseEntryData%20a%22%2C'a%5Bhref*%3D%22frameset%22%5D'%2C'a%5Bhref*%3D%22record%3Db%22%5D'%2C'a%5Bhref*%3D%22%2Fsearch%22%5D'%5D%2Cn%3D0%3Bn%3Ct.length%3Bn%2B%2B)for(var%20r%3De.querySelectorAll(t%5Bn%5D)%2Ci%3D0%3Bi%3Cr.length%3Bi%2B%2B)%7Bvar%20o%3Dr%5Bi%5D%3Bif(v(o.textContent)%26%26!o.querySelector(%22img%22)%26%26!%2Frequest~b%2F.test(o.getAttribute(%22href%22)%7C%7C%22%22))return%20o%7Dreturn%20null%7Dfunction%20T(e%2Ct)%7Bvar%20n%3Dt.querySelector(%22.briefcitDetail%22)%7C%7Ct.querySelector(%22.browseEntryData%22)%2Cr%3Dt.querySelector(%22.briefcitTitle%22)%3Bif(r%26%26v(r.textContent)%26%26(e.title%3Dv(r.textContent))%2Cn)%7Bvar%20i%3Dy(n).filter(function(t)%7Breturn%20t!%3D%3De.title%7D)%3Be.author%3Di%5B0%5D%7C%7C%22%22%2Ce.detail%3Di.slice(1).join(%22%20%C2%B7%20%22)%7Dvar%20o%3Dt.querySelector(%22.briefcitStatus%22)%2Ca%3DArray.prototype.slice.call(t.querySelectorAll(%22table%22))%3Bo%26%26%22TABLE%22%3D%3D%3Do.tagName%26%26a.unshift(o)%2Ca.sort(function(e%2Ct)%7Breturn(e.querySelector(%22table%22)%3F1%3A0)-(t.querySelector(%22table%22)%3F1%3A0)%7D)%3Bfor(var%20l%3D0%3Bl%3Ca.length%26%26!e.holdings.length%3Bl%2B%2B)e.holdings%3DE(a%5Bl%5D)%3Bif(!e.holdings.length)%7Bvar%20s%3Dv(x(o%7C%7Ct)).match(C)%3Bs%26%26e.holdings.push(%7Blocation%3A%22%22%2Ccall%3A%22%22%2Cextra%3A%22%22%2Cstatus%3As%5B0%5D%7D)%7Dif(!n)%7Bvar%20d%3Dy(t).filter(function(t)%7Breturn%20t!%3D%3De.title%26%26!C.test(t)%26%26!%2F%5E(request%7Cadd%20to%7Csave%7Cexport%7Clocation%7Ccall%20no%7Cstatus)%5Cb%2Fi.test(t)%26%26t.length%3E2%7D)%3Be.author%3Dd%5B0%5D%7C%7C%22%22%2Ce.detail%3Dd.slice(1%2C4).join(%22%20%C2%B7%20%22)%7Dvar%20c%3Dt.querySelector(%22.briefcitMedia%2C%20.briefcitFormat%22)%3Bc%26%26v(x(c))%26%26(e.format%3Dv(x(c)))%3Bvar%20p%3Dt.querySelector('img%5Bsrc*%3D%22syndetics%22%5D%2C%20img%5Bsrc*%3D%22cover%22%5D%2C%20img%5Bsrc*%3D%22isbn%22%5D%2C%20img%5Bsrc*%3D%22openlibrary%22%5D')%3Bp%26%26(e.cover%3Dm(p.getAttribute(%22src%22)))%3Bvar%20u%3Dt.querySelector('a%5Bhref*%3D%22request~b%22%5D')%3Breturn%20u%3Fe.requestUrl%3Dm(u.getAttribute(%22href%22))%3Aq.test(e.id)%26%26(e.requestUrl%3Dh(e.id))%2Ce%7Dfunction%20I(e%2Ct)%7Bvar%20n%3D%5B%5D%2Cr%3D%7B%7D%3Bfunction%20i(e)%7Bif(e.title%7C%7Ce.id)%7Bvar%20t%3De.id%7C%7Ce.url%3Br%5Bt%5D%7C%7C(r%5Bt%5D%3D!0%2Cn.push(e))%7D%7Dvar%20o%3De.querySelectorAll(%22tr.briefCitRow%2C%20tr.browseEntry%22)%3Bif(o.length)for(var%20a%3D0%3Ba%3Co.length%3Ba%2B%2B)%7Bvar%20l%3Do%5Ba%5D%2Cs%3DL(l)%2Cd%3DA(l)%2Cc%3Dq.test(s)%3Ff(s)%3Ad%3Fm(d.getAttribute(%22href%22))%3A%22%22%3Bc%26%26i(T(%7Bid%3As%7C%7Cc%2Ctitle%3Ad%3Fv(d.textContent)%3A%22%22%2Curl%3Ac%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%7D%2Cl))%7Delse%20for(var%20p%3De.querySelectorAll('a%5Bhref*%3D%22record%3Db%22%5D')%2Cu%3D%7B%7D%2Ch%3D0%3Bh%3Cp.length%3Bh%2B%2B)%7Bvar%20b%3Dp%5Bh%5D%2Cg%3D(b.getAttribute(%22href%22)%7C%7C%22%22).match(%2Frecord%3D(b%5Cd%7B5%2C9%7D)%2F)%3Bif(g)%7Bvar%20x%3Dv(b.textContent)%3Bif(u%5Bg%5B1%5D%5D)!u%5Bg%5B1%5D%5D.title%26%26x%26%26(u%5Bg%5B1%5D%5D.title%3Dx)%3Belse%7Bvar%20y%3DT(%7Bid%3Ag%5B1%5D%2Ctitle%3Ax%2Curl%3Af(g%5B1%5D)%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%7D%2Ck(b%2Cg%5B1%5D%2Ce))%3Bu%5Bg%5B1%5D%5D%3Dy%2Ci(y)%7D%7D%7Dvar%20w%3Dv(e.body%3Fe.body.textContent%3A%22%22)%2CC%3Dw.match(%2F(%5Cd%5B%5Cd%2C%5D*)%5Cs%2Bresults%3F%5Cs%2Bfound%2Fi)%7C%7Cw.match(%2Fof%5Cs%2B(%5Cd%5B%5Cd%2C%5D*)%5Cs%2B(%3F%3Aresults%7Centries%7Ctitles)%2Fi)%2CS%3DC%3FparseInt(C%5B1%5D.replace(%2F%2C%2Fg%2C%22%22)%2C10)%3Anull%3B!n.length%26%26%2Fno%20(matches%7Centries%7Cresults)%20found%7C0%20results%20found%7Cno%20hits%2Fi.test(w)%26%26(S%3D0)%3Bfor(var%20E%3Dnull%2CI%3De.querySelectorAll(%22a%5Bhref%5D%22)%2CU%3D0%3BU%3CI.length%3BU%2B%2B)%7Bvar%20N%3DI%5BU%5D%2CO%3Dv(N.textContent)%7C%7Cv(N.getAttribute(%22title%22))%7C%7C%22%22%2CR%3DN.querySelector(%22img%22)%3Fv(N.querySelector(%22img%22).getAttribute(%22alt%22))%3A%22%22%3Bif(%2F%5Enext%5Cb%2Fi.test(O)%7C%7C%2F%5Enext%5Cb%2Fi.test(R)%7C%7C%22next%22%3D%3D%3DN.rel)%7BE%3Dnew%20URL(N.getAttribute(%22href%22)%2Ct%7C%7Clocation.href).href%3Bbreak%7D%7Dreturn%7Bresults%3An%2Ctotal%3AS%2CnextUrl%3AE%7D%7Dfunction%20U(t%2Cn)%7Bfor(var%20r%3Dt.body%3Ft.body.innerHTML%3A%22%22%2Ci%3D(n%7C%7C%22%22).match(%2Frecord%3Db(%5Cd%7B5%2C9%7D)%2F)%7C%7Cr.match(%2Frequest~b(%5Cd%7B5%2C9%7D)%2F)%7C%7Cr.match(%2F%5C%2F%5C.b(%5Cd%7B5%2C9%7D)%5C%2F%2F)%7C%7Cr.match(%2Fmarksave%5B%5E%22'%5D*b(%5Cd%7B5%2C9%7D)%2F)%2Co%3Di%3F%22b%22%2Bi%5B1%5D%3A%22%22%2Ca%3D%7Bid%3Ao%2Ctitle%3A%22%22%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%2Curl%3Ao%3Ff(o)%3An%2Cfields%3A%5B%5D%2Csubjects%3A%5B%5D%2Clinks%3A%5B%5D%7D%2Cl%3Dt.querySelectorAll(%22tr%22)%2Cs%3D0%3Bs%3Cl.length%3Bs%2B%2B)%7Bvar%20d%3Dl%5Bs%5D.querySelector(%22.bibInfoLabel%22)%2Cc%3Dl%5Bs%5D.querySelector(%22.bibInfoData%22)%3Bif(d%26%26c)%7Bvar%20p%3Dv(d.textContent).replace(%2F%3A%24%2F%2C%22%22)%2Cu%3Dy(c)%3Bif(p%26%26u.length)%7Ba.fields.push(%7Blabel%3Ap%2Cvalues%3Au%7D)%3Bfor(var%20b%3Dc.querySelectorAll('a%5Bhref%5E%3D%22http%22%5D')%2Cg%3D0%3Bg%3Cb.length%3Bg%2B%2B)b%5Bg%5D.hostname%26%26b%5Bg%5D.hostname!%3D%3De%26%26a.links.push(%7Btext%3Av(b%5Bg%5D.textContent)%7C%7Cb%5Bg%5D.hostname%2Chref%3Ab%5Bg%5D.href%7D)%7D%7D%7Dif(a.fields.forEach(function(e)%7Bvar%20t%3De.label.toLowerCase()%3Bif(!a.title%26%26%2F%5E(title%7Cuniform%20title)%2F.test(t))a.title%3De.values%5B0%5D%3Belse%20if(!a.author%26%26%2F%5E(author%7Ccreator%7Cpersonal%7Ccorporate%7Cmain%20entry)%2F.test(t))a.author%3De.values%5B0%5D%3Belse%20if(!a.detail%26%26%2F%5E(publi%7Cimprint%7Cpublished)%2F.test(t))a.detail%3De.values.join(%22%20%22)%3Belse%20if(%2F%5Esubject%2F.test(t))a.subjects%3Da.subjects.concat(e.values)%3Belse%20if(%2Fisbn%2F.test(t)%26%26!a.cover)%7Bvar%20n%3D(e.values.join(%22%20%22).match(%2F%5Cb(97%5B89%5D%5Cd%7B10%7D%7C%5Cd%7B9%7D%5B%5CdXx%5D)%5Cb%2F)%7C%7C%5B%5D)%5B0%5D%3Bn%26%26(a.cover%3D%22https%3A%2F%2Fcovers.openlibrary.org%2Fb%2Fisbn%2F%22%2Bn%2B%22-M.jpg%3Fdefault%3Dfalse%22)%7D%7D)%2C!a.title)%7Bvar%20x%3Dt.querySelector(%22.bibTitle%2C%20h1%2C%20h2%22)%3Ba.title%3Dx%3Fv(x.textContent)%3Ao%7C%7C%22Untitled%20record%22%7Dvar%20w%3Dt.querySelectorAll(%22tr.bibItemsEntry%22)%3Bif(w.length%26%26(a.holdings%3DE(w%5B0%5D.closest(%22table%22)%7C%7Ct.body))%2C!a.holdings.length)for(var%20k%3Dt.querySelectorAll(%22table%22)%2CC%3D0%3BC%3Ck.length%26%26!a.holdings.length%3BC%2B%2B)%7Bvar%20q%3Dv(k%5BC%5D.textContent).toUpperCase()%3B-1%3D%3D%3Dq.indexOf(%22STATUS%22)%7C%7C-1%3D%3D%3Dq.indexOf(%22LOCATION%22)%26%26-1%3D%3D%3Dq.indexOf(%22CALL%22)%7C%7C(a.holdings%3DE(k%5BC%5D))%7Dvar%20S%3Dt.querySelector('a%5Bhref*%3D%22request~b%22%5D%2C%20form%5Baction*%3D%22request~b%22%5D')%3Breturn%20S%3Fa.requestUrl%3Dm(S.getAttribute(%22href%22)%7C%7CS.getAttribute(%22action%22))%3Ao%26%26(a.requestUrl%3Dh(o))%2Ca.requestFound%3D!!S%2Ca%7Dfunction%20N(e%2Ct)%7Btry%7Bvar%20n%3DlocalStorage.getItem(e)%3Breturn%20n%3FJSON.parse(n)%3At%7Dcatch(e)%7Breturn%20t%7D%7Dfunction%20O(e%2Ct)%7Btry%7BlocalStorage.setItem(e%2CJSON.stringify(t))%7Dcatch(e)%7B%7D%7Dvar%20R%3D%7Btab%3A%22search%22%2Cq%3A%22%22%2Cfield%3Ap%5B0%5D%2Csort%3Au%5B0%5D.key%2Cresults%3A%5B%5D%2Ctotal%3Anull%2CnextUrl%3Anull%2Cloading%3A!1%2CloadingMore%3A!1%2Cerror%3Anull%2Csearched%3A!1%2Cbag%3AN(n%2C%5B%5D)%2Crequested%3AN(i%2C%5B%5D)%2Crecent%3AN(r%2C%5B%5D)%7D%3Bfunction%20z(e)%7Breturn%20R.bag.some(function(t)%7Breturn%20t.id%3D%3D%3De%7D)%7Dfunction%20M(e)%7Bz(e.id)%3F(R.bag%3DR.bag.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)%2CQ(%22Removed%20from%20bag%22))%3A(R.bag.push(%7Bid%3Ae.id%2Ctitle%3Ae.title%2Cauthor%3Ae.author%2Cdetail%3Ae.detail%2Curl%3Ae.url%2CrequestUrl%3Ae.requestUrl%7C%7C(q.test(e.id)%3Fh(e.id)%3A%22%22)%2Ccover%3Ae.cover%7D)%2CQ(%22Added%20to%20bag%22))%2CO(n%2CR.bag)%2Cse()%7Dvar%20j%3D'html%2Cbody%7Bmax-width%3A100%25!important%3Boverflow-x%3Ahidden!important%7Dbody%7Bmargin%3A0!important%3Bpadding%3A12px%2014px%2040px!important%3Bfont-family%3A-apple-system%2CBlinkMacSystemFont%2C%22Helvetica%20Neue%22%2CHelvetica%2CArial%2Csans-serif!important%3Bfont-size%3A16px!important%3Bline-height%3A1.45!important%3Bbackground%3A%23fff!important%3Bcolor%3A%23111!important%7Dtable%7Bmax-width%3A100%25!important%7Dimg%7Bmax-width%3A100%25!important%3Bheight%3Aauto!important%7Dinput%5Btype%3Dtext%5D%2Cinput%5Btype%3Dpassword%5D%2Cinput%5Btype%3Dnumber%5D%2Cinput%5Btype%3Dtel%5D%2Cinput%3Anot(%5Btype%5D)%2Cselect%2Ctextarea%7Bfont-size%3A16px!important%3Bpadding%3A10px%2012px!important%3Bwidth%3A100%25!important%3Bmax-width%3A100%25!important%3Bbox-sizing%3Aborder-box!important%3Bborder%3A1px%20solid%20%23bdbdbd!important%3Bborder-radius%3A10px!important%3Bmargin%3A4px%200%2012px!important%3Bbackground%3A%23fff!important%3B-webkit-appearance%3Anone!important%7Dinput%5Btype%3Dsubmit%5D%2Cinput%5Btype%3Dbutton%5D%2Cbutton%7Bfont-size%3A16px!important%3Bfont-weight%3A600!important%3Bpadding%3A12px%2018px!important%3Bborder-radius%3A12px!important%3Bbackground%3A%23e4002b!important%3Bcolor%3A%23fff!important%3Bborder%3A0!important%3B-webkit-appearance%3Anone!important%3Bmargin%3A6px%200!important%7Da%7Bcolor%3A%23e4002b!important%7D%23topnav%2C.topnav%2C%23navbar%2C.navbar%2C%23banner%2C%23pageBanner%2C%23leftbar%2C%23rightbar%2C%23sidebar%2C%23footer%2C.footer%2C%23botlogo%2C%23toplogo%7Bdisplay%3Anone!important%7D'%3Bfunction%20D(e%2Ct)%7Bvar%20n%3De.split(%22.%22)%2Cr%3Ddocument.createElement(n%5B0%5D%7C%7C%22div%22)%3Bn.length%3E1%26%26(r.className%3Dn.slice(1).join(%22%20%22))%3Bvar%20i%3DArray.prototype.slice.call(arguments%2C2)%3Breturn!t%7C%7C%22object%22!%3Dtypeof%20t%7C%7Ct%20instanceof%20Node%7C%7CArray.isArray(t)%3Fnull!%3Dt%26%26i.unshift(t)%3AObject.keys(t).forEach(function(e)%7Bvar%20n%3Dt%5Be%5D%3Bif(null!%3Dn%26%26!1!%3D%3Dn)if(%22on%22%3D%3D%3De.slice(0%2C2))r.addEventListener(e.slice(2)%2Cn)%3Belse%20if(%22html%22%3D%3D%3De)r.innerHTML%3Dn%3Belse%20if(%22style%22%3D%3D%3De)r.style.cssText%3Dn%3Belse%20if(e%20in%20r%26%26%22list%22!%3D%3De)try%7Br%5Be%5D%3Dn%7Dcatch(t)%7Br.setAttribute(e%2Cn)%7Delse%20r.setAttribute(e%2Cn)%7D)%2Cfunction%20e(t)%7Bt.forEach(function(t)%7Bif(null!%3Dt%26%26!1!%3D%3Dt)return%20Array.isArray(t)%3Fe(t)%3Avoid%20r.appendChild(t%20instanceof%20Node%3Ft%3Adocument.createTextNode(String(t)))%7D)%7D(i)%2Cr%7Dvar%20B%3DD(%22div%22%2C%7Bid%3At%7D)%2CH%3DB.attachShadow(%7Bmode%3A%22open%22%7D)%3BH.appendChild(D(%22style%22%2C'%3Ahost%7Ball%3Ainitial%3Bposition%3Afixed%3Binset%3A0%3Bz-index%3A2147483647%3Bdisplay%3Ablock%7D*%7Bbox-sizing%3Aborder-box%3B-webkit-tap-highlight-color%3Atransparent%7D.app%7B--red%3A%23e4002b%3B--bg%3A%23f6f5f2%3B--card%3A%23fff%3B--fg%3A%23141414%3B--muted%3A%236b6b6b%3B--line%3A%23e3e1dc%3B--chip%3A%23ecebe7%3B--ok%3A%231a7f4b%3B--busy%3A%23b7791f%3B--note%3A%235b6b8a%3B--sheet%3A%23fff%3B%20position%3Aabsolute%3Binset%3A0%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Bbackground%3Avar(--bg)%3Bcolor%3Avar(--fg)%3B%20font%3A16px%2F1.45%20-apple-system%2CBlinkMacSystemFont%2C%22SF%20Pro%20Text%22%2C%22Helvetica%20Neue%22%2CHelvetica%2CArial%2Csans-serif%3Boverflow%3Ahidden%3B%20padding-top%3Aenv(safe-area-inset-top)%3B%7D%40media(prefers-color-scheme%3Adark)%7B.app%7B--bg%3A%23111%3B--card%3A%231c1c1e%3B--fg%3A%23f2f2f2%3B--muted%3A%23a0a0a0%3B--line%3A%232c2c2e%3B--chip%3A%232a2a2c%3B--sheet%3A%23161616%7D%7D.serif%7Bfont-family%3A%22New%20York%22%2C%22Iowan%20Old%20Style%22%2C%22Palatino%22%2C%22Georgia%22%2Cserif%7Dbutton%7Bfont%3Ainherit%3Bcolor%3Ainherit%3Bbackground%3Anone%3Bborder%3A0%3Bpadding%3A0%3Bmargin%3A0%3Bcursor%3Apointer%7Da%7Bcolor%3Ainherit%7D.hdr%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bgap%3A12px%3Bpadding%3A10px%2016px%206px%7D.hdr%20.brand%7Bflex%3A1%3Bmin-width%3A0%7D.eyebrow%7Bfont-size%3A11px%3Bfont-weight%3A700%3Bletter-spacing%3A.14em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--red)%7D.title%7Bfont-size%3A22px%3Bfont-weight%3A700%3Bline-height%3A1.15%3Bmargin%3A0%7D.iconbtn%7Bwidth%3A40px%3Bheight%3A40px%3Bborder-radius%3A50%25%3Bdisplay%3Ainline-flex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bbackground%3Avar(--chip)%3Bfont-size%3A18px%3Bflex%3Anone%7D.iconbtn%3Aactive%7Bopacity%3A.7%7D.searchbar%7Bdisplay%3Aflex%3Bgap%3A8px%3Bpadding%3A4px%2016px%208px%3Balign-items%3Acenter%7D.searchbar%20.box%7Bflex%3A1%3Bmin-width%3A0%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A14px%3Bpadding%3A0%2012px%3Bheight%3A46px%3Bbox-shadow%3A0%201px%202px%20rgba(0%2C0%2C0%2C.04)%7D.searchbar%20input%7Bflex%3A1%3Bmin-width%3A0%3Bborder%3A0%3Boutline%3A0%3Bbackground%3Atransparent%3Bfont%3Ainherit%3Bfont-size%3A17px%3Bcolor%3Ainherit%3Bheight%3A100%25%3B-webkit-appearance%3Anone%3Bappearance%3Anone%7D.searchbar%20input%3A%3A-webkit-search-cancel-button%7Bdisplay%3Anone%7D.searchbar%20.go%7Bflex%3Anone%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bborder-radius%3A12px%3Bheight%3A46px%3Bpadding%3A0%2014px%3Bfont-weight%3A600%7D.searchbar%20.clear%7Bcolor%3Avar(--muted)%3Bfont-size%3A18px%3Bpadding%3A0%204px%7D.seg%7Bdisplay%3Aflex%3Bgap%3A6px%3Bpadding%3A0%2016px%2010px%3Boverflow-x%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bscrollbar-width%3Anone%7D.seg%3A%3A-webkit-scrollbar%7Bdisplay%3Anone%7D.seg%20button%7Bwhite-space%3Anowrap%3Bpadding%3A6px%2012px%3Bborder-radius%3A999px%3Bbackground%3Avar(--chip)%3Bfont-size%3A14px%3Bfont-weight%3A500%7D.seg%20button.on%7Bbackground%3Avar(--fg)%3Bcolor%3Avar(--bg)%7Dmain%7Bflex%3A1%3Boverflow-y%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bpadding%3A0%2016px%2024px%7D.meta%7Bdisplay%3Aflex%3Bjustify-content%3Aspace-between%3Balign-items%3Acenter%3Bcolor%3Avar(--muted)%3Bfont-size%3A13px%3Bpadding%3A2px%200%2010px%7D.meta%20.sorts%20button%7Bmargin-left%3A10px%3Bfont-weight%3A600%3Bcolor%3Avar(--muted)%7D.meta%20.sorts%20button.on%7Bcolor%3Avar(--fg)%3Btext-decoration%3Aunderline%3Btext-underline-offset%3A3px%7D.card%7Bdisplay%3Aflex%3Bgap%3A12px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A16px%3Bpadding%3A12px%3Bmargin-bottom%3A10px%3Btext-align%3Aleft%3Bwidth%3A100%25%3Balign-items%3Aflex-start%7D.card%3Aactive%7Btransform%3Ascale(.995)%7D.cover%7Bwidth%3A52px%3Bheight%3A72px%3Bborder-radius%3A6px%3Bbackground%3Avar(--chip)%3Bflex%3Anone%3Boverflow%3Ahidden%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bfont-size%3A22px%3Bfont-weight%3A700%3Bcolor%3Avar(--muted)%7D.cover%20img%7Bwidth%3A100%25%3Bheight%3A100%25%3Bobject-fit%3Acover%3Bdisplay%3Ablock%7D.card%20.body%7Bflex%3A1%3Bmin-width%3A0%7D.card%20h3%7Bmargin%3A0%200%202px%3Bfont-size%3A17px%3Bline-height%3A1.25%3Bfont-weight%3A600%3Bdisplay%3A-webkit-box%3B-webkit-line-clamp%3A3%3B-webkit-box-orient%3Avertical%3Boverflow%3Ahidden%7D.sub%7Bcolor%3Avar(--muted)%3Bfont-size%3A14px%3Bmargin%3A0%200%206px%3Bdisplay%3A-webkit-box%3B-webkit-line-clamp%3A2%3B-webkit-box-orient%3Avertical%3Boverflow%3Ahidden%7D.pills%7Bdisplay%3Aflex%3Bflex-wrap%3Awrap%3Bgap%3A6px%3Balign-items%3Acenter%7D.pill%7Bfont-size%3A12px%3Bfont-weight%3A600%3Bpadding%3A3px%208px%3Bborder-radius%3A999px%3Bbackground%3Avar(--chip)%3Bcolor%3Avar(--muted)%3Bletter-spacing%3A.01em%7D.pill.ok%7Bbackground%3Argba(26%2C127%2C75%2C.12)%3Bcolor%3Avar(--ok)%7D.pill.busy%7Bbackground%3Argba(183%2C121%2C31%2C.14)%3Bcolor%3Avar(--busy)%7D.pill.note%7Bbackground%3Argba(91%2C107%2C138%2C.14)%3Bcolor%3Avar(--note)%7D.pill.call%7Bfont-family%3Aui-monospace%2CSFMono-Regular%2CMenlo%2Cmonospace%3Bfont-weight%3A500%7D.bagbtn%7Bwidth%3A36px%3Bheight%3A36px%3Bborder-radius%3A50%25%3Bbackground%3Avar(--chip)%3Bflex%3Anone%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bfont-size%3A20px%3Bfont-weight%3A600%3Balign-self%3Acenter%7D.bagbtn.on%7Bbackground%3Avar(--red)%3Bcolor%3A%23fff%7D.empty%7Bpadding%3A36px%208px%3Btext-align%3Acenter%3Bcolor%3Avar(--muted)%7D.empty%20h2%7Bfont-size%3A26px%3Bcolor%3Avar(--fg)%3Bmargin%3A0%200%208px%3Bline-height%3A1.2%7D.empty%20p%7Bmargin%3A0%20auto%2018px%3Bmax-width%3A30em%7D.chips%7Bdisplay%3Aflex%3Bflex-wrap%3Awrap%3Bgap%3A8px%3Bjustify-content%3Acenter%7D.chips%20button%7Bpadding%3A8px%2014px%3Bborder-radius%3A999px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bfont-size%3A14px%7D.skeleton%7Bheight%3A96px%3Bborder-radius%3A16px%3Bbackground%3Alinear-gradient(90deg%2Cvar(--chip)%2Cvar(--card)%2Cvar(--chip))%3Bbackground-size%3A200%25%20100%25%3Banimation%3Ash%201.2s%20infinite%3Bmargin-bottom%3A10px%7D%40keyframes%20sh%7B0%25%7Bbackground-position%3A200%25%200%7D100%25%7Bbackground-position%3A-200%25%200%7D%7D.more%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A14px%3Bborder-radius%3A14px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bfont-weight%3A600%3Bmargin%3A6px%200%2020px%7D.err%7Bbackground%3Argba(228%2C0%2C43%2C.08)%3Bborder%3A1px%20solid%20rgba(228%2C0%2C43%2C.25)%3Bcolor%3Avar(--red)%3Bborder-radius%3A14px%3Bpadding%3A14px%3Bmargin%3A8px%200%7D.err%20button%7Bfont-weight%3A700%3Btext-decoration%3Aunderline%3Bmargin-left%3A8px%7D.tabbar%7Bdisplay%3Aflex%3Bborder-top%3A1px%20solid%20var(--line)%3Bbackground%3Avar(--card)%3Bpadding%3A6px%208px%20calc(6px%20%2B%20env(safe-area-inset-bottom))%7D.tabbar%20button%7Bflex%3A1%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Balign-items%3Acenter%3Bgap%3A2px%3Bfont-size%3A11px%3Bfont-weight%3A600%3Bcolor%3Avar(--muted)%3Bpadding%3A6px%200%3Bposition%3Arelative%7D.tabbar%20button.on%7Bcolor%3Avar(--red)%7D.tabbar%20.ico%7Bfont-size%3A22px%3Bline-height%3A1%7D.badge%7Bposition%3Aabsolute%3Btop%3A2px%3Bleft%3Acalc(50%25%20%2B%208px)%3Bmin-width%3A18px%3Bheight%3A18px%3Bborder-radius%3A9px%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bfont-size%3A11px%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bpadding%3A0%205px%7D.section%7Bfont-size%3A12px%3Bfont-weight%3A700%3Bletter-spacing%3A.1em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--muted)%3Bmargin%3A16px%200%208px%7D.primary%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A15px%3Bborder-radius%3A14px%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bfont-weight%3A700%3Bfont-size%3A17px%3Btext-align%3Acenter%7D.primary%3Adisabled%7Bopacity%3A.5%7D.secondary%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A13px%3Bborder-radius%3A14px%3Bbackground%3Avar(--chip)%3Bfont-weight%3A600%3Btext-align%3Acenter%3Bmargin-top%3A8px%7D.row%7Bdisplay%3Aflex%3Bgap%3A12px%3Balign-items%3Acenter%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A14px%3Bpadding%3A12px%3Bmargin-bottom%3A8px%7D.row%20.body%7Bflex%3A1%3Bmin-width%3A0%7D.row%20h4%7Bmargin%3A0%3Bfont-size%3A16px%3Bfont-weight%3A600%3Bline-height%3A1.3%7D.row%20.x%7Bcolor%3Avar(--muted)%3Bfont-size%3A20px%3Bpadding%3A6px%7D.sheet%7Bposition%3Aabsolute%3Binset%3A0%3Bbackground%3Avar(--sheet)%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Btransform%3AtranslateY(100%25)%3Btransition%3Atransform%20.28s%20cubic-bezier(.2%2C.8%2C.2%2C1)%3Bpadding-top%3Aenv(safe-area-inset-top)%3Bwill-change%3Atransform%7D.sheet.open%7Btransform%3Anone%7D.sheet-head%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bgap%3A10px%3Bpadding%3A10px%2016px%3Bborder-bottom%3A1px%20solid%20var(--line)%7D.sheet-head%20.t%7Bflex%3A1%3Bmin-width%3A0%3Bfont-weight%3A700%3Bfont-size%3A16px%3Bwhite-space%3Anowrap%3Boverflow%3Ahidden%3Btext-overflow%3Aellipsis%7D.sheet-body%7Bflex%3A1%3Boverflow-y%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bpadding%3A16px%2016px%20calc(24px%20%2B%20env(safe-area-inset-bottom))%7D.sheet-body.frame%7Bpadding%3A0%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%7D.banner%7Bpadding%3A12px%2016px%3Bfont-size%3A14px%3Bline-height%3A1.4%3Bbackground%3Avar(--chip)%3Bborder-bottom%3A1px%20solid%20var(--line)%7D.banner.ok%7Bbackground%3Argba(26%2C127%2C75%2C.12)%3Bcolor%3Avar(--ok)%7D.banner.warn%7Bbackground%3Argba(183%2C121%2C31%2C.14)%3Bcolor%3Avar(--busy)%7Diframe%7Bflex%3A1%3Bwidth%3A100%25%3Bborder%3A0%3Bbackground%3A%23fff%7D.detail%20h1%7Bfont-size%3A24px%3Bline-height%3A1.2%3Bmargin%3A0%200%206px%3Bfont-weight%3A700%7D.detail%20.by%7Bfont-size%3A16px%3Bcolor%3Avar(--muted)%3Bmargin%3A0%200%2014px%7D.detail%20.hero%7Bdisplay%3Aflex%3Bgap%3A14px%3Balign-items%3Aflex-start%3Bmargin-bottom%3A16px%7D.detail%20.hero%20.cover%7Bwidth%3A84px%3Bheight%3A118px%3Bfont-size%3A30px%7D.hold%7Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Bgap%3A4px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A12px%3Bpadding%3A10px%2012px%3Bmargin-bottom%3A8px%3Bfont-size%3A14px%7D.hold%20b%7Bfont-weight%3A600%7Ddl%7Bmargin%3A0%7Ddt%7Bfont-size%3A12px%3Bfont-weight%3A700%3Bletter-spacing%3A.08em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--muted)%3Bmargin-top%3A12px%7Ddd%7Bmargin%3A2px%200%200%3Bfont-size%3A15px%3Bline-height%3A1.45%3Boverflow-wrap%3Aanywhere%7D.linklist%20a%7Bdisplay%3Ablock%3Bpadding%3A12px%3Bborder-radius%3A12px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bmargin-bottom%3A8px%3Btext-decoration%3Anone%3Bfont-weight%3A600%7D.stepper%7Bfont-size%3A13px%3Bcolor%3Avar(--muted)%7D.toast%7Bposition%3Aabsolute%3Bleft%3A50%25%3Bbottom%3Acalc(84px%20%2B%20env(safe-area-inset-bottom))%3Btransform%3Atranslate(-50%25%2C20px)%3Bbackground%3Avar(--fg)%3Bcolor%3Avar(--bg)%3Bpadding%3A10px%2016px%3Bborder-radius%3A999px%3Bfont-size%3A14px%3Bfont-weight%3A600%3Bopacity%3A0%3Btransition%3A.2s%3Bpointer-events%3Anone%3Bwhite-space%3Anowrap%7D.toast.show%7Bopacity%3A1%3Btransform%3Atranslate(-50%25%2C0)%7D.hint%7Bfont-size%3A13px%3Bcolor%3Avar(--muted)%3Btext-align%3Acenter%3Bmargin%3A14px%200%200%7D'))%3Bvar%20W%3DD(%22div.app%22)%3BH.appendChild(W)%3Bvar%20Y%3DD(%22header.hdr%22)%2CF%3DD(%22div%22)%2CG%3DD(%22main%22)%2CP%3DD(%22nav.tabbar%22)%2CV%3DD(%22div.sheet%22)%2CK%3DD(%22div.toast%22)%3BW.appendChild(Y)%2CW.appendChild(F)%2CW.appendChild(G)%2CW.appendChild(P)%2CW.appendChild(V)%2CW.appendChild(K)%3Bvar%20_%2CJ%2CX%3D%5Bdocument.documentElement.style.overflow%2Cdocument.body.style.overflow%5D%3Bfunction%20%24()%7Bdocument.removeEventListener(%22keydown%22%2CZ)%2Cdocument.documentElement.style.overflow%3DX%5B0%5D%2Cdocument.body.style.overflow%3DX%5B1%5D%2CB.remove()%7Dfunction%20Z(e)%7B%22Escape%22%3D%3D%3De.key%26%26(V.classList.contains(%22open%22)%3Fde()%3A%24())%7Dfunction%20Q(e)%7BK.textContent%3De%2CK.classList.add(%22show%22)%2CclearTimeout(_)%2C_%3DsetTimeout(function()%7BK.classList.remove(%22show%22)%7D%2C1600)%7Dfunction%20ee(e%2Ct)%7Bvar%20n%3DD(%22div.cover%22%2B(t%3F%22.big%22%3A%22%22))%3Bif(e.cover)%7Bvar%20r%3DD(%22img%22%2C%7Bsrc%3Ae.cover%2Calt%3A%22%22%2Cloading%3A%22lazy%22%7D)%3Br.addEventListener(%22error%22%2Cfunction()%7Br.remove()%2Cn.textContent%3Dte(e.title)%7D)%2Cn.appendChild(r)%7Delse%20n.textContent%3Dte(e.title)%3Breturn%20n%7Dfunction%20te(e)%7Bvar%20t%3D(e%7C%7C%22%22).replace(%2F%5E(the%7Ca%7Can%7Cle%7Cla%7Cles%7Cder%7Cdie%7Cdas%7Cel%7Clos%7Clas)%5Cs%2B%2Fi%2C%22%22).match(%2F%5BA-Za-z0-9%5D%2F)%3Breturn%20t%3Ft%5B0%5D.toUpperCase()%3A%22%C2%B7%22%7Dfunction%20ne()%7Bif(F.innerHTML%3D%22%22%2C%22search%22%3D%3D%3DR.tab)%7BJ%3DD(%22input%22%2C%7Btype%3A%22search%22%2Cplaceholder%3A%22Search%20books%2C%20catalogs%2C%20journals%E2%80%A6%22%2Cvalue%3AR.q%2Centerkeyhint%3A%22search%22%2Cautocapitalize%3A%22none%22%2Cautocorrect%3A%22off%22%2Cautocomplete%3A%22off%22%2Cspellcheck%3A%22false%22%2Coninput%3Afunction()%7BR.q%3DJ.value%2Ce.style.visibility%3DR.q%3F%22visible%22%3A%22hidden%22%7D%7D)%3Bvar%20e%3DD(%22button.clear%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Clear%22%2Conclick%3Afunction()%7BR.q%3D%22%22%2CJ.value%3D%22%22%2CJ.focus()%2Ce.style.visibility%3D%22hidden%22%7D%7D%2C%22%E2%A8%82%22)%3Be.style.visibility%3DR.q%3F%22visible%22%3A%22hidden%22%3Bvar%20t%3DD(%22form.searchbar%22%2C%7Bonsubmit%3Afunction(e)%7Be.preventDefault()%2CJ.blur()%2Coe()%7D%7D%2CD(%22div.box%22%2CD(%22span%22%2C%7Bstyle%3A%22color%3Avar(--muted)%3Bmargin-right%3A8px%22%7D%2C%22%F0%9F%94%8D%22)%2CJ%2Ce)%2CD(%22button.go%22%2C%7Btype%3A%22submit%22%7D%2C%22Search%22))%3BF.appendChild(t)%2CF.appendChild(D(%22div.seg%22%2Cp.map(function(e)%7Breturn%20D(%22button%22%2B(R.field.key%3D%3D%3De.key%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.field%3De%2Cne()%2CR.searched%26%26R.q%26%26oe()%7D%7D%2Ce.label)%7D)))%7D%7Dvar%20re%2Cie%3D0%3Basync%20function%20oe()%7Bvar%20e%3Dv(R.q)%3Bif(e)%7Bvar%20t%2Cn%2Ci%3D%2B%2Bie%3BR.searched%3D!0%2CR.loading%3D!0%2CR.error%3Dnull%2CR.results%3D%5B%5D%2CR.total%3Dnull%2CR.nextUrl%3Dnull%2Cfunction(e%2Ct)%7BR.recent%3D%5B%7Bq%3Ae%2Cfield%3At%7D%5D.concat(R.recent.filter(function(n)%7Breturn!(n.q%3D%3D%3De%26%26n.field%3D%3D%3Dt)%7D)).slice(0%2C8)%2CO(r%2CR.recent)%7D(e%2CR.field.key)%2Cse()%3Btry%7Bvar%20o%3Dawait%20w(function(e%2Ct%2Cn)%7Bvar%20r%3Dt.prefix%3Ft.prefix%2B%22(%22%2Be%2B%22)%22%3Ae%3Breturn%20c%2B%22%2Fsearch%22%2Bd%2B%22%2F%3Fsearchtype%3DX%26searcharg%3D%22%2BencodeURIComponent(r)%2B%22%26searchscope%3D%22%2Bs%2B%22%26SORT%3D%22%2Bn%2B%22%26extended%3D0%26SUBMIT%3DSearch%26searchlimits%3D%22%7D(e%2CR.field%2CR.sort))%3Bif(i!%3D%3Die)return%3Bvar%20a%3DI(o.doc%2Co.url)%3B!a.results.length%26%26(t%3Do.doc%2Cn%3Do.url%2C%2Frecord%3Db%5Cd%2B%2F.test(n%7C%7C%22%22)%7C%7Ct.querySelector('.bibInfoEntry%2C%20.bibItems%2C%20.bibInfoLabel%2C%20a%5Bhref*%3D%22marksave%22%5D%2C%20a%5Bhref*%3D%22request~b%22%5D'))%26%26(a%3D%7Bresults%3A%5BU(o.doc%2Co.url)%5D%2Ctotal%3A1%2CnextUrl%3Anull%7D)%2CR.results%3Da.results%2CR.total%3Da.total%2CR.nextUrl%3Da.nextUrl%2CR.lastUrl%3Do.url%7Dcatch(e)%7Bif(i!%3D%3Die)return%3BR.error%3De%26%26%22AbortError%22%3D%3D%3De.name%3F%22Watsonline%20took%20too%20long%20to%20answer.%22%3A%22Couldn%E2%80%99t%20reach%20Watsonline.%20%22%2B(e%26%26e.message%3Fe.message%3A%22%22)%7DR.loading%3D!1%2Cse()%7D%7Dasync%20function%20ae()%7Bif(R.nextUrl%26%26!R.loadingMore)%7Bvar%20e%3Die%3BR.loadingMore%3D!0%2Cse()%3Btry%7Bvar%20t%3Dawait%20w(R.nextUrl)%3Bif(e!%3D%3Die)return%3Bvar%20n%3DI(t.doc%2Ct.url)%2Cr%3D%7B%7D%3BR.results.forEach(function(e)%7Br%5Be.id%5D%3D!0%7D)%2Cn.results.forEach(function(e)%7Br%5Be.id%5D%7C%7CR.results.push(e)%7D)%2CR.nextUrl%3Dn.nextUrl%26%26n.nextUrl!%3D%3DR.nextUrl%3Fn.nextUrl%3Anull%2Cn.results.length%7C%7C(R.nextUrl%3Dnull)%7Dcatch(e)%7BQ(%22Couldn%E2%80%99t%20load%20more%22)%7DR.loadingMore%3D!1%2Cse()%7D%7Dfunction%20le(e)%7BR.tab%3De%2CG.scrollTop%3D0%2Cse()%7Dfunction%20se()%7Bvar%20e%3DG.scrollTop%3BY.innerHTML%3D%22%22%2CY.appendChild(D(%22div.brand%22%2CD(%22div.eyebrow%22%2C%22The%20Met%22)%2CD(%22h1.title.serif%22%2C%22bag%22%3D%3D%3DR.tab%3F%22Your%20bag%22%3A%22account%22%3D%3D%3DR.tab%3F%22My%20account%22%3A%22Watson%20Library%22)))%2CY.appendChild(D(%22button.iconbtn%22%2C%7Bonclick%3A%24%2C%22aria-label%22%3A%22Close%22%7D%2C%22%E2%9C%95%22))%2Cne()%2CG.innerHTML%3D%22%22%2C%22search%22%3D%3D%3DR.tab%3Ffunction()%7Bif(!R.searched)%7Bvar%20e%3DD(%22div.empty%22%2CD(%22h2.serif%22%2C%22Search%20the%20Met%E2%80%99s%20art%20library%22)%2CD(%22p%22%2C%22Over%20a%20million%20volumes%20on%20art%20and%20archaeology.%20Find%20something%2C%20add%20it%20to%20your%20bag%2C%20then%20check%20out%20to%20have%20it%20paged%20for%20your%20visit%20to%20Watson%20Library.%22))%3Breturn%20R.recent.length%3F(e.appendChild(D(%22div.section%22%2C%22Recent%22))%2Ce.appendChild(D(%22div.chips%22%2CR.recent.map(function(e)%7Bvar%20t%3Dp.filter(function(t)%7Breturn%20t.key%3D%3D%3De.field%7D)%5B0%5D%7C%7Cp%5B0%5D%3Breturn%20D(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.q%3De.q%2CR.field%3Dt%2Cne()%2Coe()%7D%7D%2C(t.prefix%3Ft.label%2B%22%3A%20%22%3A%22%22)%2Be.q)%7D))))%3Ae.appendChild(D(%22div.chips%22%2C%5B%22Vermeer%22%2C%22Japanese%20prints%22%2C%22Costume%20Institute%22%2C%22Islamic%20calligraphy%22%5D.map(function(e)%7Breturn%20D(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.q%3De%2Cne()%2Coe()%7D%7D%2Ce)%7D)))%2Cvoid%20G.appendChild(e)%7Dif(R.loading)%7BG.appendChild(D(%22div.meta%22%2CD(%22span%22%2C%22Searching%20Watsonline%E2%80%A6%22)))%3Bfor(var%20t%3D0%3Bt%3C5%3Bt%2B%2B)G.appendChild(D(%22div.skeleton%22))%7Delse%20if(R.error)G.appendChild(D(%22div.err%22%2CR.error%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Aoe%7D%2C%22Retry%22)))%3Belse%7Bvar%20n%3Dnull!%3DR.total%3FR.total.toLocaleString()%2B(1%3D%3D%3DR.total%3F%22%20result%22%3A%22%20results%22)%3AR.results.length%2B%22%20shown%22%3Bif(G.appendChild(D(%22div.meta%22%2CD(%22span%22%2Cn)%2CD(%22span.sorts%22%2Cu.map(function(e)%7Breturn%20D(%22button%22%2B(R.sort%3D%3D%3De.key%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.sort!%3D%3De.key%26%26(R.sort%3De.key%2Coe())%7D%7D%2Ce.label)%7D))))%2CR.results.length)%7Bif(R.results.forEach(function(e)%7Bvar%20t%2Cn%2Cr%3BG.appendChild((n%3DD(%22button.bagbtn%22%2B(z((t%3De).id)%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2C%22aria-label%22%3Az(t.id)%3F%22Remove%20from%20bag%22%3A%22Add%20to%20bag%22%2Conclick%3Afunction(e)%7Be.stopPropagation()%2CM(t)%7D%7D%2Cz(t.id)%3F%22%E2%9C%93%22%3A%22%2B%22)%2Cr%3D%5Bt.author%2Ct.detail%5D.filter(Boolean).join(%22%20%C2%B7%20%22)%2CD(%22button.card%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7B(async%20function(e)%7Bvar%20t%3DD(%22div.sheet-body.detail%22)%2Cn%3DD(%22button.secondary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BM(e)%2Cn.textContent%3Dz(e.id)%3F%22%E2%9C%93%20In%20your%20bag%22%3A%22%2B%20Add%20to%20bag%22%7D%7D%2Cz(e.id)%3F%22%E2%9C%93%20In%20your%20bag%22%3A%22%2B%20Add%20to%20bag%22)%3Bfunction%20r(e%2Cr)%7Bt.innerHTML%3D%22%22%2Ct.appendChild(D(%22div.hero%22%2Cee(e%2C!0)%2CD(%22div%22%2C%7Bstyle%3A%22flex%3A1%3Bmin-width%3A0%22%7D%2CD(%22h1.serif%22%2Ce.title)%2Ce.author%3FD(%22p.by%22%2Ce.author)%3Anull%2Ce.detail%3FD(%22p.sub%22%2Ce.detail)%3Anull)))%3Bvar%20i%3D!1!%3D%3De.requestFound%7C%7C!e.fields%3Bif(t.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Cdisabled%3Ar%2Conclick%3Afunction()%7Bbe(%5Be%5D)%7D%7D%2Cr%3F%22Loading%E2%80%A6%22%3A%22Request%20this%20item%22))%2Ct.appendChild(n)%2Ci%7C%7Ct.appendChild(D(%22p.hint%22%2C%22Watsonline%20didn%E2%80%99t%20show%20a%20Request%20button%20for%20this%20record%3B%20it%20may%20be%20online-only%20or%20non-requestable.%20You%20can%20still%20try.%22))%2Ct.appendChild(D(%22div.section%22%2C%22Copies%22))%2Cr%26%26!e.holdings.length%3Ft.appendChild(D(%22div.skeleton%22%2C%7Bstyle%3A%22height%3A56px%22%7D))%3Ae.holdings.length%7C%7Ct.appendChild(D(%22p.sub%22%2C%22No%20item%20information%20found.%22))%2Ce.holdings.forEach(function(e)%7Bt.appendChild(D(%22div.hold%22%2CD(%22div.pills%22%2Ce.status%3FD(%22span.pill.%22%2BS(e.status)%2Ce.status)%3Anull%2Ce.extra%3FD(%22span.pill%22%2Ce.extra)%3Anull)%2Ce.location%3FD(%22div%22%2CD(%22b%22%2C%22Location%20%22)%2Ce.location)%3Anull%2Ce.call%3FD(%22div%22%2CD(%22b%22%2C%22Call%20number%20%22)%2CD(%22span%22%2C%7Bstyle%3A%22font-family%3Aui-monospace%2CMenlo%2Cmonospace%22%7D%2Ce.call))%3Anull))%7D)%2Ce.links%26%26e.links.length%26%26(t.appendChild(D(%22div.section%22%2C%22Online%22))%2Ct.appendChild(D(%22div.linklist%22%2Ce.links.map(function(e)%7Breturn%20D(%22a%22%2C%7Bhref%3Ae.href%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%7D%2Ce.text%2B%22%20%E2%86%97%22)%7D))))%2Ce.subjects%26%26e.subjects.length%26%26(t.appendChild(D(%22div.section%22%2C%22Subjects%22))%2Ct.appendChild(D(%22div.pills%22%2Ce.subjects.map(function(e)%7Breturn%20D(%22button.pill%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bde()%2CR.q%3De.split(%2F%5Cs%2B--%5Cs%2B%2F)%5B0%5D%2CR.field%3Dp%5B3%5D%2Cle(%22search%22)%2Cne()%2Coe()%7D%7D%2Ce)%7D))))%2Ce.fields%26%26e.fields.length)%7Bvar%20o%3DD(%22dl%22)%3Be.fields.forEach(function(e)%7B%2F%5E(subject%7Ctitle%7Cauthor)%2Fi.test(e.label)%7C%7C(o.appendChild(D(%22dt%22%2Ce.label))%2Ce.values.forEach(function(e)%7Bo.appendChild(D(%22dd%22%2Ce))%7D))%7D)%2Ct.appendChild(D(%22div.section%22%2C%22Details%22))%2Ct.appendChild(o)%7D%7Dif(ce(%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Back%22%2Conclick%3Ade%7D%2C%22%E2%86%90%22)%2CD(%22div.t%22%2Ce.title)%2CD(%22a.iconbtn%22%2C%7Bhref%3Ae.url%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2C%22aria-label%22%3A%22Open%20on%20Watsonline%22%2Cstyle%3A%22text-decoration%3Anone%22%7D%2C%22%E2%86%97%22)%5D%2Ct)%2Cr(e%2C!e.fields)%2C!e.fields)try%7Bvar%20i%3Dawait%20w(e.url)%2Co%3DU(i.doc%2Ci.url)%3B%5B%22title%22%2C%22author%22%2C%22detail%22%2C%22cover%22%5D.forEach(function(t)%7B!o%5Bt%5D%26%26e%5Bt%5D%26%26(o%5Bt%5D%3De%5Bt%5D)%7D)%2Co.holdings.length%7C%7C(o.holdings%3De.holdings)%2Cq.test(o.id)%7C%7C(o.id%3De.id)%2Co.requestUrl%7C%7C(o.requestUrl%3De.requestUrl)%2CObject.assign(e%2Co)%2Cr(e%2C!1)%7Dcatch(n)%7Br(e%2C!1)%2Ct.insertBefore(D(%22div.err%22%2C%22Couldn%E2%80%99t%20load%20the%20full%20record.%20%22%2B(n.message%7C%7C%22%22))%2Ct.firstChild)%7D%7D)(t)%7D%7D%2Cee(t)%2CD(%22div.body%22%2CD(%22h3.serif%22%2Ct.title%7C%7C%22Untitled%22)%2Cr%3FD(%22p.sub%22%2Cr)%3Anull%2Cfunction(e)%7Bvar%20t%3DD(%22div.pills%22)%2Cn%3De.holdings%5B0%5D%3Breturn%20n%3F(n.status%26%26t.appendChild(D(%22span.pill.%22%2BS(n.status)%2Cn.status))%2Cn.location%26%26t.appendChild(D(%22span.pill%22%2Cn.location))%2Cn.call%26%26t.appendChild(D(%22span.pill.call%22%2Cn.call))%2Ce.holdings.length%3E1%26%26t.appendChild(D(%22span.pill%22%2C%22%2B%22%2B(e.holdings.length-1)%2B%22%20more%22))%2Ct)%3At%7D(t))%2Cn)))%7D)%2CR.nextUrl)%7Bvar%20r%3DD(%22button.more%22%2C%7Btype%3A%22button%22%2Conclick%3Aae%2Cdisabled%3AR.loadingMore%7D%2CR.loadingMore%3F%22Loading%E2%80%A6%22%3A%22Load%20more%22)%3Bif(G.appendChild(r)%2C%22IntersectionObserver%22in%20window)%7Bvar%20i%3Dnew%20IntersectionObserver(function(e)%7Be%5B0%5D.isIntersecting%26%26(i.disconnect()%2Cae())%7D%2C%7Broot%3AG%2CrootMargin%3A%22400px%22%7D)%3Bi.observe(r)%7D%7D%7Delse%20G.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Nothing%20found%22)%2CD(%22p%22%2CR.total%3F%22Watsonline%20returned%20results%20in%20a%20layout%20this%20app%20couldn%E2%80%99t%20read.%22%3A%22Try%20fewer%20words%2C%20a%20different%20spelling%2C%20or%20search%20Everything%20instead%20of%20a%20single%20field.%22)%2CR.lastUrl%3FD(%22div.linklist%22%2CD(%22a%22%2C%7Bhref%3AR.lastUrl%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%7D%2C%22Open%20this%20search%20on%20Watsonline%20%E2%86%97%22))%3Anull))%7D%7D()%3A%22bag%22%3D%3D%3DR.tab%3FR.bag.length%7C%7CR.requested.length%3F(R.bag.length%26%26(G.appendChild(D(%22div.section%22%2CR.bag.length%2B(1%3D%3D%3DR.bag.length%3F%22%20item%22%3A%22%20items%22)))%2CR.bag.forEach(function(e)%7BG.appendChild(D(%22div.row%22%2Cee(e)%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title)%2CD(%22p.sub%22%2C%5Be.author%2Ce.detail%5D.filter(Boolean).join(%22%20%C2%B7%20%22)))%2CD(%22button.x%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Remove%22%2Conclick%3Afunction()%7BM(e)%7D%7D%2C%22%E2%9C%95%22)))%7D)%2CG.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bbe()%7D%7D%2C%22Check%20out%20%C2%B7%20request%20%22%2BR.bag.length%2B(1%3D%3D%3DR.bag.length%3F%22%20item%22%3A%22%20items%22)))%2CG.appendChild(D(%22p.hint%22%2C%22Requested%20books%20are%20paged%20to%20Watson%20Library%E2%80%99s%20reading%20room%20for%20your%20visit.%20Nothing%20leaves%20the%20building.%22)))%2CR.requested.length%26%26(G.appendChild(D(%22div.section%22%2C%22Recently%20requested%22))%2CR.requested.forEach(function(e)%7BG.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title)%2CD(%22p.sub%22%2Cnew%20Date(e.at).toLocaleDateString(void%200%2C%7Bmonth%3A%22short%22%2Cday%3A%22numeric%22%7D)%2B(e.author%3F%22%20%C2%B7%20%22%2Be.author%3A%22%22)))%2CD(%22a%22%2C%7Bhref%3Ae.url%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2Cstyle%3A%22color%3Avar(--muted)%3Bfont-size%3A13px%3Btext-decoration%3Anone%22%7D%2C%22Record%20%E2%86%97%22)))%7D)%2CG.appendChild(D(%22button.secondary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.requested%3D%5B%5D%2CO(i%2C%5B%5D)%2Cse()%7D%7D%2C%22Clear%20history%22))))%3AG.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Your%20bag%20is%20empty%22)%2CD(%22p%22%2C%22Tap%20%2B%20on%20any%20result%20to%20collect%20items%2C%20then%20check%20out%20to%20request%20them%20all%20at%20once.%22)%2CD(%22div.chips%22%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Ble(%22search%22)%7D%7D%2C%22Start%20searching%22))))%3A(G.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Your%20Watsonline%20account%22)%2CD(%22p%22%2C%22See%20what%20you%20have%20checked%20out%2C%20your%20holds%2C%20saved%20searches%20and%20reading%20history.%20Sign%20in%20with%20your%20last%20name%20and%20the%20last%206%20digits%20of%20your%20library%20barcode.%22)%2CD(%22div.chips%22%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bhe(%22My%20account%22%2Cb%2C%7Blogout%3A!0%7D)%7D%7D%2C%22Open%20my%20account%22)%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bhe(%22Sign%20out%22%2Cg%2C%7B%7D)%7D%7D%2C%22Sign%20out%22))))%2CG.appendChild(D(%22p.hint%22%2C%22Library%20cards%20are%20issued%20at%20the%20Watson%20Library%20desk%3B%20visitors%2018%2B%20are%20welcome.%22)))%2CP.innerHTML%3D%22%22%2C%5B%5B%22search%22%2C%22%F0%9F%94%8D%22%2C%22Search%22%5D%2C%5B%22bag%22%2C%22%F0%9F%91%9C%22%2C%22Bag%22%5D%2C%5B%22account%22%2C%22%F0%9F%91%A4%22%2C%22Account%22%5D%5D.forEach(function(e)%7Bvar%20t%3DD(%22button%22%2B(R.tab%3D%3D%3De%5B0%5D%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Ble(e%5B0%5D)%7D%7D%2CD(%22span.ico%22%2Ce%5B1%5D)%2Ce%5B2%5D)%3B%22bag%22%3D%3D%3De%5B0%5D%26%26R.bag.length%26%26t.appendChild(D(%22span.badge%22%2CString(R.bag.length)))%2CP.appendChild(t)%7D)%2CG.scrollTop%3De%7Dfunction%20de()%7BV.classList.remove(%22open%22)%2CsetTimeout(function()%7BV.classList.contains(%22open%22)%7C%7C(V.innerHTML%3D%22%22)%7D%2C300)%2Cse()%7Dfunction%20ce(e%2Ct)%7BV.innerHTML%3D%22%22%2CV.appendChild(D(%22div.sheet-head%22%2Ce))%2CV.appendChild(t)%2CrequestAnimationFrame(function()%7BV.classList.add(%22open%22)%7D)%7Dfunction%20pe(e)%7Btry%7Bvar%20t%3De.contentDocument%3Bif(!t%7C%7C!t.head)return%20null%3Bif(!t.querySelector('meta%5Bname%3D%22viewport%22%5D'))%7Bvar%20n%3Dt.createElement(%22meta%22)%3Bn.name%3D%22viewport%22%2Cn.content%3D%22width%3Ddevice-width%2C%20initial-scale%3D1%22%2Ct.head.appendChild(n)%7Dvar%20r%3Dt.createElement(%22style%22)%3Breturn%20r.textContent%3Dj%2Ct.head.appendChild(r)%2Ct%7Dcatch(e)%7Breturn%20null%7D%7Dfunction%20ue(e)%7Bvar%20t%3Dv(e.body%3Fe.body.textContent%3A%22%22)%3Breturn%2Fwas%20successful%7Csuccessfully%20(placed%7Crequested%7Csubmitted)%7Crequest%20has%20been%20(placed%7Creceived%7Csubmitted)%7Cyour%20request%20for%20.*%20was%2Fi.test(t)%3F%22success%22%3Ae.querySelector('input%5Bname%3D%22code%22%5D%2C%20input%5Bname%3D%22pin%22%5D%2C%20input%5Bname%3D%22password%22%5D%2C%20input%5Btype%3D%22password%22%5D%2C%20form%5Baction*%3D%22cas%2Flogin%22%5D')%3F%22login%22%3A%2Fnot%20requestable%7Ccannot%20be%20requested%7Ccan%20not%20be%20requested%7Cno%20items%3F%20(are%20)%3Favailable%7Cunable%20to%20(place%7Cprocess)%7Calready%20(have%7Crequested%7Cplaced)%7Cnot%20eligible%7Cexceeds%2Fi.test(t)%3F%22problem%22%3A%22form%22%7Dfunction%20fe(e%2Ct%2Cn%2Cr)%7Be.className%3D%22banner%22%2B(t%3F%22%20%22%2Bt%3A%22%22)%2Ce.innerHTML%3D%22%22%2Ce.appendChild(document.createTextNode(n%2B%22%20%22))%2Cr%26%26e.appendChild(D(%22a%22%2C%7Bhref%3Ar%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2Cstyle%3A%22font-weight%3A600%3Bwhite-space%3Anowrap%22%7D%2C%22Open%20in%20Watsonline%20%E2%86%97%22))%7Dfunction%20he(e%2Ct%2Cn)%7Bvar%20r%3DD(%22div.banner%22)%3Bfe(r%2C%22%22%2C%22Loading%20Watsonline%E2%80%A6%22%2Ct)%3Bvar%20i%3DD(%22iframe%22%2C%7Bsrc%3At%2Ctitle%3Ae%7D)%2Co%3DD(%22div.sheet-body.frame%22%2Cr%2Ci)%2Ca%3D%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Close%22%2Conclick%3Ade%7D%2C%22%E2%9C%95%22)%2CD(%22div.t%22%2Ce)%5D%3Bn%26%26n.logout%26%26a.push(D(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Sign%20out%22%2Ctitle%3A%22Sign%20out%22%2Conclick%3Afunction()%7Bi.src%3Dg%7D%7D%2C%22%E2%8E%8B%22))%2Cce(a%2Co)%2Ci.addEventListener(%22load%22%2Cfunction()%7Bvar%20e%3Dpe(i)%3Be%3F%22login%22%3D%3D%3Due(e)%3Ffe(r%2C%22%22%2C%22Sign%20in%20with%20your%20last%20name%20and%20the%20last%206%20digits%20of%20your%20library%20barcode.%22%2Ct)%3A%2Flogout%2F.test(i.src)%3Ffe(r%2C%22ok%22%2C%22You%E2%80%99re%20signed%20out.%22%2C%22%22)%3Afe(r%2C%22%22%2C%22Your%20Watsonline%20account.%22%2Ct)%3Afe(r%2C%22warn%22%2C%22Watsonline%20wouldn%E2%80%99t%20load%20inside%20this%20sheet.%22%2Ct)%7D)%7Dfunction%20be(e)%7Bvar%20t%3D(e%7C%7CR.bag).slice()%3Bif(t.length)%7Bvar%20r%3D0%2Co%3D%7B%7D%2Ca%3DD(%22div.banner%22)%2Cl%3DD(%22iframe%22%2C%7Btitle%3A%22Watsonline%20request%22%7D)%2Cs%3DD(%22div.t%22)%2Cd%3DD(%22div.stepper%22)%2Cc%3DD(%22div.sheet-body.frame%22%2Ca%2Cl)%2Cp%3DD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Skip%22%2Ctitle%3A%22Skip%20this%20item%22%2Conclick%3Afunction()%7Bo%5Bt%5Br%5D.id%5D%3Do%5Bt%5Br%5D.id%5D%7C%7C%22skipped%22%2Cb()%7D%7D%2C%22%E2%8F%AD%22)%3Bce(%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Close%22%2Conclick%3Ade%7D%2C%22%E2%9C%95%22)%2CD(%22div%22%2C%7Bstyle%3A%22flex%3A1%3Bmin-width%3A0%22%7D%2Cs%2Cd)%2Cp%5D%2Cc)%2Cl.addEventListener(%22load%22%2Cfunction()%7Bvar%20e%3Dt%5Br%5D%3Bif(e)%7Bvar%20s%3Dpe(l)%3Bif(s)%7Bvar%20d%3Due(s)%3B%22success%22%3D%3D%3Dd%3F%22success%22!%3D%3Do%5Be.id%5D%26%26(o%5Be.id%5D%3D%22success%22%2Cfunction(e)%7BR.bag%3DR.bag.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)%2CR.requested%3D%5B%7Bid%3Ae.id%2Ctitle%3Ae.title%2Cauthor%3Ae.author%2Curl%3Ae.url%2Cat%3ADate.now()%7D%5D.concat(R.requested.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)).slice(0%2C30)%2CO(n%2CR.bag)%2CO(i%2CR.requested)%7D(e)%2Cfe(a%2C%22ok%22%2C%22%E2%9C%93%20Requested.%20%22%2B(r%2B1%3Ct.length%3F%22Next%20item%20in%20a%20moment%E2%80%A6%22%3A%22Wrapping%20up%E2%80%A6%22)%2C%22%22)%2CsetTimeout(b%2C1400))%3A%22login%22%3D%3D%3Dd%3Ffe(a%2C%22%22%2C%22Sign%20in%20to%20place%20the%20request%3A%20last%20name%20%2B%20last%206%20digits%20of%20your%20library%20barcode.%22%2Cu())%3A%22problem%22%3D%3D%3Dd%3F(o%5Be.id%5D%3D%22not%20requestable%22%2Cfe(a%2C%22warn%22%2C%22Watsonline%20couldn%E2%80%99t%20take%20this%20request.%20Tap%20%E2%8F%AD%20to%20skip%20it.%22%2Cu()))%3Afe(a%2C%22%22%2C%22Choose%20a%20pickup%20location%20if%20asked%2C%20then%20submit%20the%20request.%22%2Cu())%7Delse%20fe(a%2C%22warn%22%2C%22Watsonline%20wouldn%E2%80%99t%20load%20inside%20this%20sheet.%20Request%20it%20there%2C%20then%20tap%20%E2%8F%AD.%22%2Cu())%7D%7D)%2Cf()%7Dfunction%20u()%7Bvar%20e%3Dt%5Br%5D%3Breturn%20e.requestUrl%7C%7C(q.test(e.id)%3Fh(e.id)%3Ae.url)%7Dfunction%20f()%7Bvar%20e%3Dt%5Br%5D%3Bs.textContent%3De.title%2Cd.textContent%3D%22Checkout%20%C2%B7%20%22%2B(r%2B1)%2B%22%20of%20%22%2Bt.length%2Cfe(a%2C%22%22%2C%22Loading%20request%20form%E2%80%A6%22%2Cu())%2Cl.src%3Du()%7Dfunction%20b()%7Bvar%20e%2Cn%2Ci%3B%2B%2Br%3Ct.length%3Ff()%3A(e%3Dt.filter(function(e)%7Breturn%22success%22%3D%3D%3Do%5Be.id%5D%7D)%2Cn%3Dt.filter(function(e)%7Breturn%22success%22!%3D%3Do%5Be.id%5D%7D)%2Ci%3DD(%22div.sheet-body%22%2CD(%22h1.serif%22%2C%7Bstyle%3A%22font-size%3A26px%3Bmargin%3A8px%200%206px%22%7D%2Ce.length%3F%22Requested%20%22%2Be.length%2B(1%3D%3D%3De.length%3F%22%20item%22%3A%22%20items%22)%3A%22No%20requests%20placed%22)%2CD(%22p.sub%22%2Ce.length%3F%22Watson%20Library%20will%20page%20these%20for%20you.%20Check%20the%20paging%20schedule%20for%20when%20they%E2%80%99ll%20be%20ready%20in%20the%20reading%20room.%22%3A%22Nothing%20was%20confirmed%20by%20Watsonline.%22))%2Ce.length%26%26(i.appendChild(D(%22div.section%22%2C%22Requested%22))%2Ce.forEach(function(e)%7Bi.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title))%2CD(%22span.pill.ok%22%2C%22%E2%9C%93%22)))%7D))%2Cn.length%26%26(i.appendChild(D(%22div.section%22%2C%22Still%20in%20your%20bag%22))%2Cn.forEach(function(e)%7Bi.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title))%2CD(%22span.pill.busy%22%2Co%5Be.id%5D%7C%7C%22skipped%22)))%7D))%2Ci.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Cstyle%3A%22margin-top%3A20px%22%2Conclick%3Afunction()%7Bde()%2Cle(%22bag%22)%7D%7D%2C%22Done%22))%2CV.innerHTML%3D%22%22%2CV.appendChild(D(%22div.sheet-head%22%2CD(%22div.t%22%2C%22Checkout%20complete%22)))%2CV.appendChild(i))%7D%7D(re%3Ddocument.querySelector('meta%5Bname%3D%22viewport%22%5D'))%7C%7C((re%3Ddocument.createElement(%22meta%22)).name%3D%22viewport%22%2Cdocument.head.appendChild(re))%2Cre.content%3D%22width%3Ddevice-width%2C%20initial-scale%3D1%2C%20viewport-fit%3Dcover%22%2Cdocument.documentElement.style.overflow%3D%22hidden%22%2Cdocument.body.style.overflow%3D%22hidden%22%2Cdocument.body.appendChild(B)%2Cdocument.addEventListener(%22keydown%22%2CZ)%2Cse()%2C!R.searched%26%26J%26%26setTimeout(function()%7Btry%7BJ.focus()%7Dcatch(e)%7B%7D%7D%2C350)%2Co()%7D)()%3B">Watson Library (offline)</a> <button class="btn ghost" type="button" data-copy="javascript:(function()%7B%22use%20strict%22%3Bvar%20e%3D%22library.metmuseum.org%22%2Ct%3D%22watson-app-host%22%2Cn%3D%22watson.bag%22%2Cr%3D%22watson.recent%22%2Ci%3D%22watson.requested%22%3Bfunction%20o()%7Btry%7B%22function%22%3D%3Dtypeof%20completion%26%26completion()%7Dcatch(e)%7B%7D%7Dif(location.hostname!%3D%3De)return%20location.href%3D%22https%3A%2F%2F%22%2Be%2B%22%2F%22%2Cvoid%20o()%3Bvar%20a%3Ddocument.getElementById(t)%3Ba%26%26a.remove()%3Bvar%20l%3Dlocation.pathname.match(%2F~S(%5Cd%2B)%2F)%2Cs%3Dl%3Fl%5B1%5D%3A%221%22%2Cd%3D%22~S%22%2Bs%2Cc%3Dlocation.origin%2Cp%3D%5B%7Bkey%3A%22X%22%2Clabel%3A%22Everything%22%2Cprefix%3A%22%22%7D%2C%7Bkey%3A%22t%22%2Clabel%3A%22Title%22%2Cprefix%3A%22t%3A%22%7D%2C%7Bkey%3A%22a%22%2Clabel%3A%22Author%22%2Cprefix%3A%22a%3A%22%7D%2C%7Bkey%3A%22d%22%2Clabel%3A%22Subject%22%2Cprefix%3A%22d%3A%22%7D%5D%2Cu%3D%5B%7Bkey%3A%22R%22%2Clabel%3A%22Relevance%22%7D%2C%7Bkey%3A%22D%22%2Clabel%3A%22Date%22%7D%5D%3Bfunction%20f(e)%7Breturn%20c%2B%22%2Frecord%3D%22%2Be%2Bd%7Dfunction%20h(e)%7Breturn%20c%2B%22%2Fsearch%22%2Bd%2B%22%3F%2F.%22%2Be%2B%22%2F.%22%2Be%2B%22%2F1%2C1%2C1%2CB%2Frequest~%22%2Be%7Dvar%20b%3Dc%2B%22%2Fpatroninfo%22%2Bd%2B%22%2F%22%2Cg%3Dc%2B%22%2Flogout%22%2Bd%2B%22%3F%22%3Bfunction%20m(e)%7Btry%7Breturn%20new%20URL(e%2Clocation.href).href%7Dcatch(t)%7Breturn%20e%7D%7Dfunction%20v(e)%7Breturn(e%7C%7C%22%22).replace(%2F%C2%A0%2Fg%2C%22%20%22).replace(%2F%5Cs%2B%2Fg%2C%22%20%22).trim()%7Dfunction%20x(e)%7Bvar%20t%3D%22%22%3Breturn%20function%20e(n)%7Bfor(var%20r%3Dn.firstChild%3Br%3Br%3Dr.nextSibling)if(3!%3D%3Dr.nodeType)%7Bif(1%3D%3D%3Dr.nodeType)%7Bvar%20i%3Dr.tagName%3Bif(%22SCRIPT%22!%3D%3Di%26%26%22STYLE%22!%3D%3Di)if(%22BR%22!%3D%3Di)%7Bvar%20o%3D%2F%5E(DIV%7CP%7CTR%7CLI%7CTABLE%7CUL%7COL%7CDD%7CDT%7CH%5B1-6%5D)%24%2F.test(i)%3Bo%26%26(t%2B%3D%22%5Cn%22)%2Ce(r)%2Co%26%26(t%2B%3D%22%5Cn%22)%7Delse%20t%2B%3D%22%5Cn%22%7D%7Delse%20t%2B%3Dr.nodeValue%7D(e)%2Ct%7Dfunction%20y(e)%7Breturn%20x(e).split(%22%5Cn%22).map(v).filter(Boolean)%7Dasync%20function%20w(e)%7Bvar%20t%3D%22undefined%22!%3Dtypeof%20AbortController%3Fnew%20AbortController%3Anull%2Cn%3Dt%3FsetTimeout(function()%7Bt.abort()%7D%2C2e4)%3Anull%3Btry%7Bvar%20r%3Dawait%20fetch(e%2C%7Bcredentials%3A%22same-origin%22%2Csignal%3At%3Ft.signal%3Avoid%200%7D)%3Bif(!r.ok)throw%20new%20Error(%22Watsonline%20answered%20with%20status%20%22%2Br.status)%3Bvar%20i%3Dawait%20r.text()%3Breturn%7Bdoc%3A(new%20DOMParser).parseFromString(i%2C%22text%2Fhtml%22)%2Curl%3Ar.url%7C%7Ce%7D%7Dfinally%7Bn%26%26clearTimeout(n)%7D%7Dfunction%20k(e%2Ct%2Cn)%7Bfor(var%20r%3De%3Br.parentElement%26%26r.parentElement!%3D%3Dn%26%26r.parentElement!%3D%3Dn.body%3B)%7Bfor(var%20i%3Dr.parentElement%2Co%3Di.querySelectorAll('a%5Bhref*%3D%22record%3Db%22%5D')%2Ca%3D!1%2Cl%3D0%3Bl%3Co.length%3Bl%2B%2B)if(-1%3D%3D%3D(o%5Bl%5D.getAttribute(%22href%22)%7C%7C%22%22).indexOf(%22record%3D%22%2Bt))%7Ba%3D!0%3Bbreak%7Dif(a)break%3Br%3Di%7Dreturn%20r%7Dvar%20C%3D%2F%5Cb(AVAILABLE%7CCHECKED%20OUT%7CIN%20LIBRARY%7CLIB%20USE%20ONLY%7CLIBRARY%20USE%20ONLY%7CIN%20PROCESS%7CON%20HOLD%7CON%20ORDER%7CDUE%20%5Cd%5Cd-%5Cd%5Cd-%5Cd%5Cd%7CMISSING%7CLOST%7CNON-CIRC%7CNON-CIRCULATING%7CONLINE%7CIN%20TRANSIT%7CBEING%20PAGED%7CASK%20AT%20DESK%7CON%20RESERVE%7CSTORAGE%7COFFSITE)%5Cb%2F%2Cq%3D%2F%5Eb%5Cd%7B5%2C9%7D%24%2F%3Bfunction%20S(e)%7Breturn(e%3D(e%7C%7C%22%22).toUpperCase())%3F%2FAVAILABLE%7CIN%20LIBRARY%7CASK%20AT%20DESK%2F.test(e)%3F%22ok%22%3A%2FLIB%20USE%7CLIBRARY%20USE%7CNON-CIRC%7CONLINE%7CON%20RESERVE%7CSTORAGE%7COFFSITE%2F.test(e)%3F%22note%22%3A%2FCHECKED%20OUT%7CDUE%7CIN%20PROCESS%7CON%20HOLD%7CON%20ORDER%7CMISSING%7CLOST%7CIN%20TRANSIT%7CBEING%20PAGED%2F.test(e)%3F%22busy%22%3A%22%22%3A%22%22%7Dfunction%20E(e)%7Bvar%20t%3D%5B%5D%3Bif(!function(e)%7Bif(e.querySelector(%22tr.bibItemsEntry%22))return!0%3Bvar%20t%3De.querySelector(%22tr%22)%2Cn%3Dt%3Fv(t.textContent).toUpperCase()%3A%22%22%3Breturn%2FSTATUS%2F.test(n)%26%26%2FLOCATION%7CCALL%2F.test(n)%7D(e))return%20t%3Bfor(var%20n%3De.querySelectorAll(%22tr%22)%2Cr%3D0%3Br%3Cn.length%3Br%2B%2B)%7Bvar%20i%3Dn%5Br%5D.querySelectorAll(%22td%22)%3Bif(!(i.length%3C2))%7Bfor(var%20o%3D%5B%5D%2Ca%3D0%3Ba%3Ci.length%3Ba%2B%2B)o.push(v(x(i%5Ba%5D)))%3Bfor(var%20l%3D%22%22%2Cs%3Do.length-1%3Bs%3E%3D0%3Bs--)if(o%5Bs%5D.length%3C%3D40%26%26C.test(o%5Bs%5D))%7Bl%3Do%5Bs%5D%2Co.splice(s%2C1)%3Bbreak%7D(l%7C%7Cn%5Br%5D.classList.contains(%22bibItemsEntry%22))%26%26t.push(%7Blocation%3Ao%5B0%5D%7C%7C%22%22%2Ccall%3Ao%5B1%5D%7C%7C%22%22%2Cextra%3Ao.slice(2).join(%22%20%C2%B7%20%22)%2Cstatus%3Al%7D)%7D%7Dreturn%20t%7Dfunction%20L(e)%7Bvar%20t%3De.querySelector('input%5Bname%3D%22save%22%5D')%3Bif(t%26%26q.test(t.value))return%20t.value%3Bvar%20n%3D(e.innerHTML%7C%7C%22%22).match(%2Frecord%3D(b%5Cd%7B5%2C9%7D)%2F)%7C%7C(e.innerHTML%7C%7C%22%22).match(%2Frequest~(b%5Cd%7B5%2C9%7D)%2F)%7C%7C(e.innerHTML%7C%7C%22%22).match(%2F%5C%2F%5C.(b%5Cd%7B5%2C9%7D)%5C%2F%2F)%3Breturn%20n%3Fn%5B1%5D%3A%22%22%7Dfunction%20A(e)%7Bfor(var%20t%3D%5B%22.briefcitTitle%20a%22%2C%22.browseEntryData%20a%22%2C'a%5Bhref*%3D%22frameset%22%5D'%2C'a%5Bhref*%3D%22record%3Db%22%5D'%2C'a%5Bhref*%3D%22%2Fsearch%22%5D'%5D%2Cn%3D0%3Bn%3Ct.length%3Bn%2B%2B)for(var%20r%3De.querySelectorAll(t%5Bn%5D)%2Ci%3D0%3Bi%3Cr.length%3Bi%2B%2B)%7Bvar%20o%3Dr%5Bi%5D%3Bif(v(o.textContent)%26%26!o.querySelector(%22img%22)%26%26!%2Frequest~b%2F.test(o.getAttribute(%22href%22)%7C%7C%22%22))return%20o%7Dreturn%20null%7Dfunction%20T(e%2Ct)%7Bvar%20n%3Dt.querySelector(%22.briefcitDetail%22)%7C%7Ct.querySelector(%22.browseEntryData%22)%2Cr%3Dt.querySelector(%22.briefcitTitle%22)%3Bif(r%26%26v(r.textContent)%26%26(e.title%3Dv(r.textContent))%2Cn)%7Bvar%20i%3Dy(n).filter(function(t)%7Breturn%20t!%3D%3De.title%7D)%3Be.author%3Di%5B0%5D%7C%7C%22%22%2Ce.detail%3Di.slice(1).join(%22%20%C2%B7%20%22)%7Dvar%20o%3Dt.querySelector(%22.briefcitStatus%22)%2Ca%3DArray.prototype.slice.call(t.querySelectorAll(%22table%22))%3Bo%26%26%22TABLE%22%3D%3D%3Do.tagName%26%26a.unshift(o)%2Ca.sort(function(e%2Ct)%7Breturn(e.querySelector(%22table%22)%3F1%3A0)-(t.querySelector(%22table%22)%3F1%3A0)%7D)%3Bfor(var%20l%3D0%3Bl%3Ca.length%26%26!e.holdings.length%3Bl%2B%2B)e.holdings%3DE(a%5Bl%5D)%3Bif(!e.holdings.length)%7Bvar%20s%3Dv(x(o%7C%7Ct)).match(C)%3Bs%26%26e.holdings.push(%7Blocation%3A%22%22%2Ccall%3A%22%22%2Cextra%3A%22%22%2Cstatus%3As%5B0%5D%7D)%7Dif(!n)%7Bvar%20d%3Dy(t).filter(function(t)%7Breturn%20t!%3D%3De.title%26%26!C.test(t)%26%26!%2F%5E(request%7Cadd%20to%7Csave%7Cexport%7Clocation%7Ccall%20no%7Cstatus)%5Cb%2Fi.test(t)%26%26t.length%3E2%7D)%3Be.author%3Dd%5B0%5D%7C%7C%22%22%2Ce.detail%3Dd.slice(1%2C4).join(%22%20%C2%B7%20%22)%7Dvar%20c%3Dt.querySelector(%22.briefcitMedia%2C%20.briefcitFormat%22)%3Bc%26%26v(x(c))%26%26(e.format%3Dv(x(c)))%3Bvar%20p%3Dt.querySelector('img%5Bsrc*%3D%22syndetics%22%5D%2C%20img%5Bsrc*%3D%22cover%22%5D%2C%20img%5Bsrc*%3D%22isbn%22%5D%2C%20img%5Bsrc*%3D%22openlibrary%22%5D')%3Bp%26%26(e.cover%3Dm(p.getAttribute(%22src%22)))%3Bvar%20u%3Dt.querySelector('a%5Bhref*%3D%22request~b%22%5D')%3Breturn%20u%3Fe.requestUrl%3Dm(u.getAttribute(%22href%22))%3Aq.test(e.id)%26%26(e.requestUrl%3Dh(e.id))%2Ce%7Dfunction%20I(e%2Ct)%7Bvar%20n%3D%5B%5D%2Cr%3D%7B%7D%3Bfunction%20i(e)%7Bif(e.title%7C%7Ce.id)%7Bvar%20t%3De.id%7C%7Ce.url%3Br%5Bt%5D%7C%7C(r%5Bt%5D%3D!0%2Cn.push(e))%7D%7Dvar%20o%3De.querySelectorAll(%22tr.briefCitRow%2C%20tr.browseEntry%22)%3Bif(o.length)for(var%20a%3D0%3Ba%3Co.length%3Ba%2B%2B)%7Bvar%20l%3Do%5Ba%5D%2Cs%3DL(l)%2Cd%3DA(l)%2Cc%3Dq.test(s)%3Ff(s)%3Ad%3Fm(d.getAttribute(%22href%22))%3A%22%22%3Bc%26%26i(T(%7Bid%3As%7C%7Cc%2Ctitle%3Ad%3Fv(d.textContent)%3A%22%22%2Curl%3Ac%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%7D%2Cl))%7Delse%20for(var%20p%3De.querySelectorAll('a%5Bhref*%3D%22record%3Db%22%5D')%2Cu%3D%7B%7D%2Ch%3D0%3Bh%3Cp.length%3Bh%2B%2B)%7Bvar%20b%3Dp%5Bh%5D%2Cg%3D(b.getAttribute(%22href%22)%7C%7C%22%22).match(%2Frecord%3D(b%5Cd%7B5%2C9%7D)%2F)%3Bif(g)%7Bvar%20x%3Dv(b.textContent)%3Bif(u%5Bg%5B1%5D%5D)!u%5Bg%5B1%5D%5D.title%26%26x%26%26(u%5Bg%5B1%5D%5D.title%3Dx)%3Belse%7Bvar%20y%3DT(%7Bid%3Ag%5B1%5D%2Ctitle%3Ax%2Curl%3Af(g%5B1%5D)%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%7D%2Ck(b%2Cg%5B1%5D%2Ce))%3Bu%5Bg%5B1%5D%5D%3Dy%2Ci(y)%7D%7D%7Dvar%20w%3Dv(e.body%3Fe.body.textContent%3A%22%22)%2CC%3Dw.match(%2F(%5Cd%5B%5Cd%2C%5D*)%5Cs%2Bresults%3F%5Cs%2Bfound%2Fi)%7C%7Cw.match(%2Fof%5Cs%2B(%5Cd%5B%5Cd%2C%5D*)%5Cs%2B(%3F%3Aresults%7Centries%7Ctitles)%2Fi)%2CS%3DC%3FparseInt(C%5B1%5D.replace(%2F%2C%2Fg%2C%22%22)%2C10)%3Anull%3B!n.length%26%26%2Fno%20(matches%7Centries%7Cresults)%20found%7C0%20results%20found%7Cno%20hits%2Fi.test(w)%26%26(S%3D0)%3Bfor(var%20E%3Dnull%2CI%3De.querySelectorAll(%22a%5Bhref%5D%22)%2CU%3D0%3BU%3CI.length%3BU%2B%2B)%7Bvar%20N%3DI%5BU%5D%2CO%3Dv(N.textContent)%7C%7Cv(N.getAttribute(%22title%22))%7C%7C%22%22%2CR%3DN.querySelector(%22img%22)%3Fv(N.querySelector(%22img%22).getAttribute(%22alt%22))%3A%22%22%3Bif(%2F%5Enext%5Cb%2Fi.test(O)%7C%7C%2F%5Enext%5Cb%2Fi.test(R)%7C%7C%22next%22%3D%3D%3DN.rel)%7BE%3Dnew%20URL(N.getAttribute(%22href%22)%2Ct%7C%7Clocation.href).href%3Bbreak%7D%7Dreturn%7Bresults%3An%2Ctotal%3AS%2CnextUrl%3AE%7D%7Dfunction%20U(t%2Cn)%7Bfor(var%20r%3Dt.body%3Ft.body.innerHTML%3A%22%22%2Ci%3D(n%7C%7C%22%22).match(%2Frecord%3Db(%5Cd%7B5%2C9%7D)%2F)%7C%7Cr.match(%2Frequest~b(%5Cd%7B5%2C9%7D)%2F)%7C%7Cr.match(%2F%5C%2F%5C.b(%5Cd%7B5%2C9%7D)%5C%2F%2F)%7C%7Cr.match(%2Fmarksave%5B%5E%22'%5D*b(%5Cd%7B5%2C9%7D)%2F)%2Co%3Di%3F%22b%22%2Bi%5B1%5D%3A%22%22%2Ca%3D%7Bid%3Ao%2Ctitle%3A%22%22%2Cauthor%3A%22%22%2Cdetail%3A%22%22%2Choldings%3A%5B%5D%2Ccover%3A%22%22%2CrequestUrl%3A%22%22%2Curl%3Ao%3Ff(o)%3An%2Cfields%3A%5B%5D%2Csubjects%3A%5B%5D%2Clinks%3A%5B%5D%7D%2Cl%3Dt.querySelectorAll(%22tr%22)%2Cs%3D0%3Bs%3Cl.length%3Bs%2B%2B)%7Bvar%20d%3Dl%5Bs%5D.querySelector(%22.bibInfoLabel%22)%2Cc%3Dl%5Bs%5D.querySelector(%22.bibInfoData%22)%3Bif(d%26%26c)%7Bvar%20p%3Dv(d.textContent).replace(%2F%3A%24%2F%2C%22%22)%2Cu%3Dy(c)%3Bif(p%26%26u.length)%7Ba.fields.push(%7Blabel%3Ap%2Cvalues%3Au%7D)%3Bfor(var%20b%3Dc.querySelectorAll('a%5Bhref%5E%3D%22http%22%5D')%2Cg%3D0%3Bg%3Cb.length%3Bg%2B%2B)b%5Bg%5D.hostname%26%26b%5Bg%5D.hostname!%3D%3De%26%26a.links.push(%7Btext%3Av(b%5Bg%5D.textContent)%7C%7Cb%5Bg%5D.hostname%2Chref%3Ab%5Bg%5D.href%7D)%7D%7D%7Dif(a.fields.forEach(function(e)%7Bvar%20t%3De.label.toLowerCase()%3Bif(!a.title%26%26%2F%5E(title%7Cuniform%20title)%2F.test(t))a.title%3De.values%5B0%5D%3Belse%20if(!a.author%26%26%2F%5E(author%7Ccreator%7Cpersonal%7Ccorporate%7Cmain%20entry)%2F.test(t))a.author%3De.values%5B0%5D%3Belse%20if(!a.detail%26%26%2F%5E(publi%7Cimprint%7Cpublished)%2F.test(t))a.detail%3De.values.join(%22%20%22)%3Belse%20if(%2F%5Esubject%2F.test(t))a.subjects%3Da.subjects.concat(e.values)%3Belse%20if(%2Fisbn%2F.test(t)%26%26!a.cover)%7Bvar%20n%3D(e.values.join(%22%20%22).match(%2F%5Cb(97%5B89%5D%5Cd%7B10%7D%7C%5Cd%7B9%7D%5B%5CdXx%5D)%5Cb%2F)%7C%7C%5B%5D)%5B0%5D%3Bn%26%26(a.cover%3D%22https%3A%2F%2Fcovers.openlibrary.org%2Fb%2Fisbn%2F%22%2Bn%2B%22-M.jpg%3Fdefault%3Dfalse%22)%7D%7D)%2C!a.title)%7Bvar%20x%3Dt.querySelector(%22.bibTitle%2C%20h1%2C%20h2%22)%3Ba.title%3Dx%3Fv(x.textContent)%3Ao%7C%7C%22Untitled%20record%22%7Dvar%20w%3Dt.querySelectorAll(%22tr.bibItemsEntry%22)%3Bif(w.length%26%26(a.holdings%3DE(w%5B0%5D.closest(%22table%22)%7C%7Ct.body))%2C!a.holdings.length)for(var%20k%3Dt.querySelectorAll(%22table%22)%2CC%3D0%3BC%3Ck.length%26%26!a.holdings.length%3BC%2B%2B)%7Bvar%20q%3Dv(k%5BC%5D.textContent).toUpperCase()%3B-1%3D%3D%3Dq.indexOf(%22STATUS%22)%7C%7C-1%3D%3D%3Dq.indexOf(%22LOCATION%22)%26%26-1%3D%3D%3Dq.indexOf(%22CALL%22)%7C%7C(a.holdings%3DE(k%5BC%5D))%7Dvar%20S%3Dt.querySelector('a%5Bhref*%3D%22request~b%22%5D%2C%20form%5Baction*%3D%22request~b%22%5D')%3Breturn%20S%3Fa.requestUrl%3Dm(S.getAttribute(%22href%22)%7C%7CS.getAttribute(%22action%22))%3Ao%26%26(a.requestUrl%3Dh(o))%2Ca.requestFound%3D!!S%2Ca%7Dfunction%20N(e%2Ct)%7Btry%7Bvar%20n%3DlocalStorage.getItem(e)%3Breturn%20n%3FJSON.parse(n)%3At%7Dcatch(e)%7Breturn%20t%7D%7Dfunction%20O(e%2Ct)%7Btry%7BlocalStorage.setItem(e%2CJSON.stringify(t))%7Dcatch(e)%7B%7D%7Dvar%20R%3D%7Btab%3A%22search%22%2Cq%3A%22%22%2Cfield%3Ap%5B0%5D%2Csort%3Au%5B0%5D.key%2Cresults%3A%5B%5D%2Ctotal%3Anull%2CnextUrl%3Anull%2Cloading%3A!1%2CloadingMore%3A!1%2Cerror%3Anull%2Csearched%3A!1%2Cbag%3AN(n%2C%5B%5D)%2Crequested%3AN(i%2C%5B%5D)%2Crecent%3AN(r%2C%5B%5D)%7D%3Bfunction%20z(e)%7Breturn%20R.bag.some(function(t)%7Breturn%20t.id%3D%3D%3De%7D)%7Dfunction%20M(e)%7Bz(e.id)%3F(R.bag%3DR.bag.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)%2CQ(%22Removed%20from%20bag%22))%3A(R.bag.push(%7Bid%3Ae.id%2Ctitle%3Ae.title%2Cauthor%3Ae.author%2Cdetail%3Ae.detail%2Curl%3Ae.url%2CrequestUrl%3Ae.requestUrl%7C%7C(q.test(e.id)%3Fh(e.id)%3A%22%22)%2Ccover%3Ae.cover%7D)%2CQ(%22Added%20to%20bag%22))%2CO(n%2CR.bag)%2Cse()%7Dvar%20j%3D'html%2Cbody%7Bmax-width%3A100%25!important%3Boverflow-x%3Ahidden!important%7Dbody%7Bmargin%3A0!important%3Bpadding%3A12px%2014px%2040px!important%3Bfont-family%3A-apple-system%2CBlinkMacSystemFont%2C%22Helvetica%20Neue%22%2CHelvetica%2CArial%2Csans-serif!important%3Bfont-size%3A16px!important%3Bline-height%3A1.45!important%3Bbackground%3A%23fff!important%3Bcolor%3A%23111!important%7Dtable%7Bmax-width%3A100%25!important%7Dimg%7Bmax-width%3A100%25!important%3Bheight%3Aauto!important%7Dinput%5Btype%3Dtext%5D%2Cinput%5Btype%3Dpassword%5D%2Cinput%5Btype%3Dnumber%5D%2Cinput%5Btype%3Dtel%5D%2Cinput%3Anot(%5Btype%5D)%2Cselect%2Ctextarea%7Bfont-size%3A16px!important%3Bpadding%3A10px%2012px!important%3Bwidth%3A100%25!important%3Bmax-width%3A100%25!important%3Bbox-sizing%3Aborder-box!important%3Bborder%3A1px%20solid%20%23bdbdbd!important%3Bborder-radius%3A10px!important%3Bmargin%3A4px%200%2012px!important%3Bbackground%3A%23fff!important%3B-webkit-appearance%3Anone!important%7Dinput%5Btype%3Dsubmit%5D%2Cinput%5Btype%3Dbutton%5D%2Cbutton%7Bfont-size%3A16px!important%3Bfont-weight%3A600!important%3Bpadding%3A12px%2018px!important%3Bborder-radius%3A12px!important%3Bbackground%3A%23e4002b!important%3Bcolor%3A%23fff!important%3Bborder%3A0!important%3B-webkit-appearance%3Anone!important%3Bmargin%3A6px%200!important%7Da%7Bcolor%3A%23e4002b!important%7D%23topnav%2C.topnav%2C%23navbar%2C.navbar%2C%23banner%2C%23pageBanner%2C%23leftbar%2C%23rightbar%2C%23sidebar%2C%23footer%2C.footer%2C%23botlogo%2C%23toplogo%7Bdisplay%3Anone!important%7D'%3Bfunction%20D(e%2Ct)%7Bvar%20n%3De.split(%22.%22)%2Cr%3Ddocument.createElement(n%5B0%5D%7C%7C%22div%22)%3Bn.length%3E1%26%26(r.className%3Dn.slice(1).join(%22%20%22))%3Bvar%20i%3DArray.prototype.slice.call(arguments%2C2)%3Breturn!t%7C%7C%22object%22!%3Dtypeof%20t%7C%7Ct%20instanceof%20Node%7C%7CArray.isArray(t)%3Fnull!%3Dt%26%26i.unshift(t)%3AObject.keys(t).forEach(function(e)%7Bvar%20n%3Dt%5Be%5D%3Bif(null!%3Dn%26%26!1!%3D%3Dn)if(%22on%22%3D%3D%3De.slice(0%2C2))r.addEventListener(e.slice(2)%2Cn)%3Belse%20if(%22html%22%3D%3D%3De)r.innerHTML%3Dn%3Belse%20if(%22style%22%3D%3D%3De)r.style.cssText%3Dn%3Belse%20if(e%20in%20r%26%26%22list%22!%3D%3De)try%7Br%5Be%5D%3Dn%7Dcatch(t)%7Br.setAttribute(e%2Cn)%7Delse%20r.setAttribute(e%2Cn)%7D)%2Cfunction%20e(t)%7Bt.forEach(function(t)%7Bif(null!%3Dt%26%26!1!%3D%3Dt)return%20Array.isArray(t)%3Fe(t)%3Avoid%20r.appendChild(t%20instanceof%20Node%3Ft%3Adocument.createTextNode(String(t)))%7D)%7D(i)%2Cr%7Dvar%20B%3DD(%22div%22%2C%7Bid%3At%7D)%2CH%3DB.attachShadow(%7Bmode%3A%22open%22%7D)%3BH.appendChild(D(%22style%22%2C'%3Ahost%7Ball%3Ainitial%3Bposition%3Afixed%3Binset%3A0%3Bz-index%3A2147483647%3Bdisplay%3Ablock%7D*%7Bbox-sizing%3Aborder-box%3B-webkit-tap-highlight-color%3Atransparent%7D.app%7B--red%3A%23e4002b%3B--bg%3A%23f6f5f2%3B--card%3A%23fff%3B--fg%3A%23141414%3B--muted%3A%236b6b6b%3B--line%3A%23e3e1dc%3B--chip%3A%23ecebe7%3B--ok%3A%231a7f4b%3B--busy%3A%23b7791f%3B--note%3A%235b6b8a%3B--sheet%3A%23fff%3B%20position%3Aabsolute%3Binset%3A0%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Bbackground%3Avar(--bg)%3Bcolor%3Avar(--fg)%3B%20font%3A16px%2F1.45%20-apple-system%2CBlinkMacSystemFont%2C%22SF%20Pro%20Text%22%2C%22Helvetica%20Neue%22%2CHelvetica%2CArial%2Csans-serif%3Boverflow%3Ahidden%3B%20padding-top%3Aenv(safe-area-inset-top)%3B%7D%40media(prefers-color-scheme%3Adark)%7B.app%7B--bg%3A%23111%3B--card%3A%231c1c1e%3B--fg%3A%23f2f2f2%3B--muted%3A%23a0a0a0%3B--line%3A%232c2c2e%3B--chip%3A%232a2a2c%3B--sheet%3A%23161616%7D%7D.serif%7Bfont-family%3A%22New%20York%22%2C%22Iowan%20Old%20Style%22%2C%22Palatino%22%2C%22Georgia%22%2Cserif%7Dbutton%7Bfont%3Ainherit%3Bcolor%3Ainherit%3Bbackground%3Anone%3Bborder%3A0%3Bpadding%3A0%3Bmargin%3A0%3Bcursor%3Apointer%7Da%7Bcolor%3Ainherit%7D.hdr%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bgap%3A12px%3Bpadding%3A10px%2016px%206px%7D.hdr%20.brand%7Bflex%3A1%3Bmin-width%3A0%7D.eyebrow%7Bfont-size%3A11px%3Bfont-weight%3A700%3Bletter-spacing%3A.14em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--red)%7D.title%7Bfont-size%3A22px%3Bfont-weight%3A700%3Bline-height%3A1.15%3Bmargin%3A0%7D.iconbtn%7Bwidth%3A40px%3Bheight%3A40px%3Bborder-radius%3A50%25%3Bdisplay%3Ainline-flex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bbackground%3Avar(--chip)%3Bfont-size%3A18px%3Bflex%3Anone%7D.iconbtn%3Aactive%7Bopacity%3A.7%7D.searchbar%7Bdisplay%3Aflex%3Bgap%3A8px%3Bpadding%3A4px%2016px%208px%3Balign-items%3Acenter%7D.searchbar%20.box%7Bflex%3A1%3Bmin-width%3A0%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A14px%3Bpadding%3A0%2012px%3Bheight%3A46px%3Bbox-shadow%3A0%201px%202px%20rgba(0%2C0%2C0%2C.04)%7D.searchbar%20input%7Bflex%3A1%3Bmin-width%3A0%3Bborder%3A0%3Boutline%3A0%3Bbackground%3Atransparent%3Bfont%3Ainherit%3Bfont-size%3A17px%3Bcolor%3Ainherit%3Bheight%3A100%25%3B-webkit-appearance%3Anone%3Bappearance%3Anone%7D.searchbar%20input%3A%3A-webkit-search-cancel-button%7Bdisplay%3Anone%7D.searchbar%20.go%7Bflex%3Anone%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bborder-radius%3A12px%3Bheight%3A46px%3Bpadding%3A0%2014px%3Bfont-weight%3A600%7D.searchbar%20.clear%7Bcolor%3Avar(--muted)%3Bfont-size%3A18px%3Bpadding%3A0%204px%7D.seg%7Bdisplay%3Aflex%3Bgap%3A6px%3Bpadding%3A0%2016px%2010px%3Boverflow-x%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bscrollbar-width%3Anone%7D.seg%3A%3A-webkit-scrollbar%7Bdisplay%3Anone%7D.seg%20button%7Bwhite-space%3Anowrap%3Bpadding%3A6px%2012px%3Bborder-radius%3A999px%3Bbackground%3Avar(--chip)%3Bfont-size%3A14px%3Bfont-weight%3A500%7D.seg%20button.on%7Bbackground%3Avar(--fg)%3Bcolor%3Avar(--bg)%7Dmain%7Bflex%3A1%3Boverflow-y%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bpadding%3A0%2016px%2024px%7D.meta%7Bdisplay%3Aflex%3Bjustify-content%3Aspace-between%3Balign-items%3Acenter%3Bcolor%3Avar(--muted)%3Bfont-size%3A13px%3Bpadding%3A2px%200%2010px%7D.meta%20.sorts%20button%7Bmargin-left%3A10px%3Bfont-weight%3A600%3Bcolor%3Avar(--muted)%7D.meta%20.sorts%20button.on%7Bcolor%3Avar(--fg)%3Btext-decoration%3Aunderline%3Btext-underline-offset%3A3px%7D.card%7Bdisplay%3Aflex%3Bgap%3A12px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A16px%3Bpadding%3A12px%3Bmargin-bottom%3A10px%3Btext-align%3Aleft%3Bwidth%3A100%25%3Balign-items%3Aflex-start%7D.card%3Aactive%7Btransform%3Ascale(.995)%7D.cover%7Bwidth%3A52px%3Bheight%3A72px%3Bborder-radius%3A6px%3Bbackground%3Avar(--chip)%3Bflex%3Anone%3Boverflow%3Ahidden%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bfont-size%3A22px%3Bfont-weight%3A700%3Bcolor%3Avar(--muted)%7D.cover%20img%7Bwidth%3A100%25%3Bheight%3A100%25%3Bobject-fit%3Acover%3Bdisplay%3Ablock%7D.card%20.body%7Bflex%3A1%3Bmin-width%3A0%7D.card%20h3%7Bmargin%3A0%200%202px%3Bfont-size%3A17px%3Bline-height%3A1.25%3Bfont-weight%3A600%3Bdisplay%3A-webkit-box%3B-webkit-line-clamp%3A3%3B-webkit-box-orient%3Avertical%3Boverflow%3Ahidden%7D.sub%7Bcolor%3Avar(--muted)%3Bfont-size%3A14px%3Bmargin%3A0%200%206px%3Bdisplay%3A-webkit-box%3B-webkit-line-clamp%3A2%3B-webkit-box-orient%3Avertical%3Boverflow%3Ahidden%7D.pills%7Bdisplay%3Aflex%3Bflex-wrap%3Awrap%3Bgap%3A6px%3Balign-items%3Acenter%7D.pill%7Bfont-size%3A12px%3Bfont-weight%3A600%3Bpadding%3A3px%208px%3Bborder-radius%3A999px%3Bbackground%3Avar(--chip)%3Bcolor%3Avar(--muted)%3Bletter-spacing%3A.01em%7D.pill.ok%7Bbackground%3Argba(26%2C127%2C75%2C.12)%3Bcolor%3Avar(--ok)%7D.pill.busy%7Bbackground%3Argba(183%2C121%2C31%2C.14)%3Bcolor%3Avar(--busy)%7D.pill.note%7Bbackground%3Argba(91%2C107%2C138%2C.14)%3Bcolor%3Avar(--note)%7D.pill.call%7Bfont-family%3Aui-monospace%2CSFMono-Regular%2CMenlo%2Cmonospace%3Bfont-weight%3A500%7D.bagbtn%7Bwidth%3A36px%3Bheight%3A36px%3Bborder-radius%3A50%25%3Bbackground%3Avar(--chip)%3Bflex%3Anone%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bfont-size%3A20px%3Bfont-weight%3A600%3Balign-self%3Acenter%7D.bagbtn.on%7Bbackground%3Avar(--red)%3Bcolor%3A%23fff%7D.empty%7Bpadding%3A36px%208px%3Btext-align%3Acenter%3Bcolor%3Avar(--muted)%7D.empty%20h2%7Bfont-size%3A26px%3Bcolor%3Avar(--fg)%3Bmargin%3A0%200%208px%3Bline-height%3A1.2%7D.empty%20p%7Bmargin%3A0%20auto%2018px%3Bmax-width%3A30em%7D.chips%7Bdisplay%3Aflex%3Bflex-wrap%3Awrap%3Bgap%3A8px%3Bjustify-content%3Acenter%7D.chips%20button%7Bpadding%3A8px%2014px%3Bborder-radius%3A999px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bfont-size%3A14px%7D.skeleton%7Bheight%3A96px%3Bborder-radius%3A16px%3Bbackground%3Alinear-gradient(90deg%2Cvar(--chip)%2Cvar(--card)%2Cvar(--chip))%3Bbackground-size%3A200%25%20100%25%3Banimation%3Ash%201.2s%20infinite%3Bmargin-bottom%3A10px%7D%40keyframes%20sh%7B0%25%7Bbackground-position%3A200%25%200%7D100%25%7Bbackground-position%3A-200%25%200%7D%7D.more%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A14px%3Bborder-radius%3A14px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bfont-weight%3A600%3Bmargin%3A6px%200%2020px%7D.err%7Bbackground%3Argba(228%2C0%2C43%2C.08)%3Bborder%3A1px%20solid%20rgba(228%2C0%2C43%2C.25)%3Bcolor%3Avar(--red)%3Bborder-radius%3A14px%3Bpadding%3A14px%3Bmargin%3A8px%200%7D.err%20button%7Bfont-weight%3A700%3Btext-decoration%3Aunderline%3Bmargin-left%3A8px%7D.tabbar%7Bdisplay%3Aflex%3Bborder-top%3A1px%20solid%20var(--line)%3Bbackground%3Avar(--card)%3Bpadding%3A6px%208px%20calc(6px%20%2B%20env(safe-area-inset-bottom))%7D.tabbar%20button%7Bflex%3A1%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Balign-items%3Acenter%3Bgap%3A2px%3Bfont-size%3A11px%3Bfont-weight%3A600%3Bcolor%3Avar(--muted)%3Bpadding%3A6px%200%3Bposition%3Arelative%7D.tabbar%20button.on%7Bcolor%3Avar(--red)%7D.tabbar%20.ico%7Bfont-size%3A22px%3Bline-height%3A1%7D.badge%7Bposition%3Aabsolute%3Btop%3A2px%3Bleft%3Acalc(50%25%20%2B%208px)%3Bmin-width%3A18px%3Bheight%3A18px%3Bborder-radius%3A9px%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bfont-size%3A11px%3Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Acenter%3Bpadding%3A0%205px%7D.section%7Bfont-size%3A12px%3Bfont-weight%3A700%3Bletter-spacing%3A.1em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--muted)%3Bmargin%3A16px%200%208px%7D.primary%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A15px%3Bborder-radius%3A14px%3Bbackground%3Avar(--red)%3Bcolor%3A%23fff%3Bfont-weight%3A700%3Bfont-size%3A17px%3Btext-align%3Acenter%7D.primary%3Adisabled%7Bopacity%3A.5%7D.secondary%7Bdisplay%3Ablock%3Bwidth%3A100%25%3Bpadding%3A13px%3Bborder-radius%3A14px%3Bbackground%3Avar(--chip)%3Bfont-weight%3A600%3Btext-align%3Acenter%3Bmargin-top%3A8px%7D.row%7Bdisplay%3Aflex%3Bgap%3A12px%3Balign-items%3Acenter%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A14px%3Bpadding%3A12px%3Bmargin-bottom%3A8px%7D.row%20.body%7Bflex%3A1%3Bmin-width%3A0%7D.row%20h4%7Bmargin%3A0%3Bfont-size%3A16px%3Bfont-weight%3A600%3Bline-height%3A1.3%7D.row%20.x%7Bcolor%3Avar(--muted)%3Bfont-size%3A20px%3Bpadding%3A6px%7D.sheet%7Bposition%3Aabsolute%3Binset%3A0%3Bbackground%3Avar(--sheet)%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Btransform%3AtranslateY(100%25)%3Btransition%3Atransform%20.28s%20cubic-bezier(.2%2C.8%2C.2%2C1)%3Bpadding-top%3Aenv(safe-area-inset-top)%3Bwill-change%3Atransform%7D.sheet.open%7Btransform%3Anone%7D.sheet-head%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bgap%3A10px%3Bpadding%3A10px%2016px%3Bborder-bottom%3A1px%20solid%20var(--line)%7D.sheet-head%20.t%7Bflex%3A1%3Bmin-width%3A0%3Bfont-weight%3A700%3Bfont-size%3A16px%3Bwhite-space%3Anowrap%3Boverflow%3Ahidden%3Btext-overflow%3Aellipsis%7D.sheet-body%7Bflex%3A1%3Boverflow-y%3Aauto%3B-webkit-overflow-scrolling%3Atouch%3Bpadding%3A16px%2016px%20calc(24px%20%2B%20env(safe-area-inset-bottom))%7D.sheet-body.frame%7Bpadding%3A0%3Bdisplay%3Aflex%3Bflex-direction%3Acolumn%7D.banner%7Bpadding%3A12px%2016px%3Bfont-size%3A14px%3Bline-height%3A1.4%3Bbackground%3Avar(--chip)%3Bborder-bottom%3A1px%20solid%20var(--line)%7D.banner.ok%7Bbackground%3Argba(26%2C127%2C75%2C.12)%3Bcolor%3Avar(--ok)%7D.banner.warn%7Bbackground%3Argba(183%2C121%2C31%2C.14)%3Bcolor%3Avar(--busy)%7Diframe%7Bflex%3A1%3Bwidth%3A100%25%3Bborder%3A0%3Bbackground%3A%23fff%7D.detail%20h1%7Bfont-size%3A24px%3Bline-height%3A1.2%3Bmargin%3A0%200%206px%3Bfont-weight%3A700%7D.detail%20.by%7Bfont-size%3A16px%3Bcolor%3Avar(--muted)%3Bmargin%3A0%200%2014px%7D.detail%20.hero%7Bdisplay%3Aflex%3Bgap%3A14px%3Balign-items%3Aflex-start%3Bmargin-bottom%3A16px%7D.detail%20.hero%20.cover%7Bwidth%3A84px%3Bheight%3A118px%3Bfont-size%3A30px%7D.hold%7Bdisplay%3Aflex%3Bflex-direction%3Acolumn%3Bgap%3A4px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bborder-radius%3A12px%3Bpadding%3A10px%2012px%3Bmargin-bottom%3A8px%3Bfont-size%3A14px%7D.hold%20b%7Bfont-weight%3A600%7Ddl%7Bmargin%3A0%7Ddt%7Bfont-size%3A12px%3Bfont-weight%3A700%3Bletter-spacing%3A.08em%3Btext-transform%3Auppercase%3Bcolor%3Avar(--muted)%3Bmargin-top%3A12px%7Ddd%7Bmargin%3A2px%200%200%3Bfont-size%3A15px%3Bline-height%3A1.45%3Boverflow-wrap%3Aanywhere%7D.linklist%20a%7Bdisplay%3Ablock%3Bpadding%3A12px%3Bborder-radius%3A12px%3Bbackground%3Avar(--card)%3Bborder%3A1px%20solid%20var(--line)%3Bmargin-bottom%3A8px%3Btext-decoration%3Anone%3Bfont-weight%3A600%7D.stepper%7Bfont-size%3A13px%3Bcolor%3Avar(--muted)%7D.toast%7Bposition%3Aabsolute%3Bleft%3A50%25%3Bbottom%3Acalc(84px%20%2B%20env(safe-area-inset-bottom))%3Btransform%3Atranslate(-50%25%2C20px)%3Bbackground%3Avar(--fg)%3Bcolor%3Avar(--bg)%3Bpadding%3A10px%2016px%3Bborder-radius%3A999px%3Bfont-size%3A14px%3Bfont-weight%3A600%3Bopacity%3A0%3Btransition%3A.2s%3Bpointer-events%3Anone%3Bwhite-space%3Anowrap%7D.toast.show%7Bopacity%3A1%3Btransform%3Atranslate(-50%25%2C0)%7D.hint%7Bfont-size%3A13px%3Bcolor%3Avar(--muted)%3Btext-align%3Acenter%3Bmargin%3A14px%200%200%7D'))%3Bvar%20W%3DD(%22div.app%22)%3BH.appendChild(W)%3Bvar%20Y%3DD(%22header.hdr%22)%2CF%3DD(%22div%22)%2CG%3DD(%22main%22)%2CP%3DD(%22nav.tabbar%22)%2CV%3DD(%22div.sheet%22)%2CK%3DD(%22div.toast%22)%3BW.appendChild(Y)%2CW.appendChild(F)%2CW.appendChild(G)%2CW.appendChild(P)%2CW.appendChild(V)%2CW.appendChild(K)%3Bvar%20_%2CJ%2CX%3D%5Bdocument.documentElement.style.overflow%2Cdocument.body.style.overflow%5D%3Bfunction%20%24()%7Bdocument.removeEventListener(%22keydown%22%2CZ)%2Cdocument.documentElement.style.overflow%3DX%5B0%5D%2Cdocument.body.style.overflow%3DX%5B1%5D%2CB.remove()%7Dfunction%20Z(e)%7B%22Escape%22%3D%3D%3De.key%26%26(V.classList.contains(%22open%22)%3Fde()%3A%24())%7Dfunction%20Q(e)%7BK.textContent%3De%2CK.classList.add(%22show%22)%2CclearTimeout(_)%2C_%3DsetTimeout(function()%7BK.classList.remove(%22show%22)%7D%2C1600)%7Dfunction%20ee(e%2Ct)%7Bvar%20n%3DD(%22div.cover%22%2B(t%3F%22.big%22%3A%22%22))%3Bif(e.cover)%7Bvar%20r%3DD(%22img%22%2C%7Bsrc%3Ae.cover%2Calt%3A%22%22%2Cloading%3A%22lazy%22%7D)%3Br.addEventListener(%22error%22%2Cfunction()%7Br.remove()%2Cn.textContent%3Dte(e.title)%7D)%2Cn.appendChild(r)%7Delse%20n.textContent%3Dte(e.title)%3Breturn%20n%7Dfunction%20te(e)%7Bvar%20t%3D(e%7C%7C%22%22).replace(%2F%5E(the%7Ca%7Can%7Cle%7Cla%7Cles%7Cder%7Cdie%7Cdas%7Cel%7Clos%7Clas)%5Cs%2B%2Fi%2C%22%22).match(%2F%5BA-Za-z0-9%5D%2F)%3Breturn%20t%3Ft%5B0%5D.toUpperCase()%3A%22%C2%B7%22%7Dfunction%20ne()%7Bif(F.innerHTML%3D%22%22%2C%22search%22%3D%3D%3DR.tab)%7BJ%3DD(%22input%22%2C%7Btype%3A%22search%22%2Cplaceholder%3A%22Search%20books%2C%20catalogs%2C%20journals%E2%80%A6%22%2Cvalue%3AR.q%2Centerkeyhint%3A%22search%22%2Cautocapitalize%3A%22none%22%2Cautocorrect%3A%22off%22%2Cautocomplete%3A%22off%22%2Cspellcheck%3A%22false%22%2Coninput%3Afunction()%7BR.q%3DJ.value%2Ce.style.visibility%3DR.q%3F%22visible%22%3A%22hidden%22%7D%7D)%3Bvar%20e%3DD(%22button.clear%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Clear%22%2Conclick%3Afunction()%7BR.q%3D%22%22%2CJ.value%3D%22%22%2CJ.focus()%2Ce.style.visibility%3D%22hidden%22%7D%7D%2C%22%E2%A8%82%22)%3Be.style.visibility%3DR.q%3F%22visible%22%3A%22hidden%22%3Bvar%20t%3DD(%22form.searchbar%22%2C%7Bonsubmit%3Afunction(e)%7Be.preventDefault()%2CJ.blur()%2Coe()%7D%7D%2CD(%22div.box%22%2CD(%22span%22%2C%7Bstyle%3A%22color%3Avar(--muted)%3Bmargin-right%3A8px%22%7D%2C%22%F0%9F%94%8D%22)%2CJ%2Ce)%2CD(%22button.go%22%2C%7Btype%3A%22submit%22%7D%2C%22Search%22))%3BF.appendChild(t)%2CF.appendChild(D(%22div.seg%22%2Cp.map(function(e)%7Breturn%20D(%22button%22%2B(R.field.key%3D%3D%3De.key%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.field%3De%2Cne()%2CR.searched%26%26R.q%26%26oe()%7D%7D%2Ce.label)%7D)))%7D%7Dvar%20re%2Cie%3D0%3Basync%20function%20oe()%7Bvar%20e%3Dv(R.q)%3Bif(e)%7Bvar%20t%2Cn%2Ci%3D%2B%2Bie%3BR.searched%3D!0%2CR.loading%3D!0%2CR.error%3Dnull%2CR.results%3D%5B%5D%2CR.total%3Dnull%2CR.nextUrl%3Dnull%2Cfunction(e%2Ct)%7BR.recent%3D%5B%7Bq%3Ae%2Cfield%3At%7D%5D.concat(R.recent.filter(function(n)%7Breturn!(n.q%3D%3D%3De%26%26n.field%3D%3D%3Dt)%7D)).slice(0%2C8)%2CO(r%2CR.recent)%7D(e%2CR.field.key)%2Cse()%3Btry%7Bvar%20o%3Dawait%20w(function(e%2Ct%2Cn)%7Bvar%20r%3Dt.prefix%3Ft.prefix%2B%22(%22%2Be%2B%22)%22%3Ae%3Breturn%20c%2B%22%2Fsearch%22%2Bd%2B%22%2F%3Fsearchtype%3DX%26searcharg%3D%22%2BencodeURIComponent(r)%2B%22%26searchscope%3D%22%2Bs%2B%22%26SORT%3D%22%2Bn%2B%22%26extended%3D0%26SUBMIT%3DSearch%26searchlimits%3D%22%7D(e%2CR.field%2CR.sort))%3Bif(i!%3D%3Die)return%3Bvar%20a%3DI(o.doc%2Co.url)%3B!a.results.length%26%26(t%3Do.doc%2Cn%3Do.url%2C%2Frecord%3Db%5Cd%2B%2F.test(n%7C%7C%22%22)%7C%7Ct.querySelector('.bibInfoEntry%2C%20.bibItems%2C%20.bibInfoLabel%2C%20a%5Bhref*%3D%22marksave%22%5D%2C%20a%5Bhref*%3D%22request~b%22%5D'))%26%26(a%3D%7Bresults%3A%5BU(o.doc%2Co.url)%5D%2Ctotal%3A1%2CnextUrl%3Anull%7D)%2CR.results%3Da.results%2CR.total%3Da.total%2CR.nextUrl%3Da.nextUrl%2CR.lastUrl%3Do.url%7Dcatch(e)%7Bif(i!%3D%3Die)return%3BR.error%3De%26%26%22AbortError%22%3D%3D%3De.name%3F%22Watsonline%20took%20too%20long%20to%20answer.%22%3A%22Couldn%E2%80%99t%20reach%20Watsonline.%20%22%2B(e%26%26e.message%3Fe.message%3A%22%22)%7DR.loading%3D!1%2Cse()%7D%7Dasync%20function%20ae()%7Bif(R.nextUrl%26%26!R.loadingMore)%7Bvar%20e%3Die%3BR.loadingMore%3D!0%2Cse()%3Btry%7Bvar%20t%3Dawait%20w(R.nextUrl)%3Bif(e!%3D%3Die)return%3Bvar%20n%3DI(t.doc%2Ct.url)%2Cr%3D%7B%7D%3BR.results.forEach(function(e)%7Br%5Be.id%5D%3D!0%7D)%2Cn.results.forEach(function(e)%7Br%5Be.id%5D%7C%7CR.results.push(e)%7D)%2CR.nextUrl%3Dn.nextUrl%26%26n.nextUrl!%3D%3DR.nextUrl%3Fn.nextUrl%3Anull%2Cn.results.length%7C%7C(R.nextUrl%3Dnull)%7Dcatch(e)%7BQ(%22Couldn%E2%80%99t%20load%20more%22)%7DR.loadingMore%3D!1%2Cse()%7D%7Dfunction%20le(e)%7BR.tab%3De%2CG.scrollTop%3D0%2Cse()%7Dfunction%20se()%7Bvar%20e%3DG.scrollTop%3BY.innerHTML%3D%22%22%2CY.appendChild(D(%22div.brand%22%2CD(%22div.eyebrow%22%2C%22The%20Met%22)%2CD(%22h1.title.serif%22%2C%22bag%22%3D%3D%3DR.tab%3F%22Your%20bag%22%3A%22account%22%3D%3D%3DR.tab%3F%22My%20account%22%3A%22Watson%20Library%22)))%2CY.appendChild(D(%22button.iconbtn%22%2C%7Bonclick%3A%24%2C%22aria-label%22%3A%22Close%22%7D%2C%22%E2%9C%95%22))%2Cne()%2CG.innerHTML%3D%22%22%2C%22search%22%3D%3D%3DR.tab%3Ffunction()%7Bif(!R.searched)%7Bvar%20e%3DD(%22div.empty%22%2CD(%22h2.serif%22%2C%22Search%20the%20Met%E2%80%99s%20art%20library%22)%2CD(%22p%22%2C%22Over%20a%20million%20volumes%20on%20art%20and%20archaeology.%20Find%20something%2C%20add%20it%20to%20your%20bag%2C%20then%20check%20out%20to%20have%20it%20paged%20for%20your%20visit%20to%20Watson%20Library.%22))%3Breturn%20R.recent.length%3F(e.appendChild(D(%22div.section%22%2C%22Recent%22))%2Ce.appendChild(D(%22div.chips%22%2CR.recent.map(function(e)%7Bvar%20t%3Dp.filter(function(t)%7Breturn%20t.key%3D%3D%3De.field%7D)%5B0%5D%7C%7Cp%5B0%5D%3Breturn%20D(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.q%3De.q%2CR.field%3Dt%2Cne()%2Coe()%7D%7D%2C(t.prefix%3Ft.label%2B%22%3A%20%22%3A%22%22)%2Be.q)%7D))))%3Ae.appendChild(D(%22div.chips%22%2C%5B%22Vermeer%22%2C%22Japanese%20prints%22%2C%22Costume%20Institute%22%2C%22Islamic%20calligraphy%22%5D.map(function(e)%7Breturn%20D(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.q%3De%2Cne()%2Coe()%7D%7D%2Ce)%7D)))%2Cvoid%20G.appendChild(e)%7Dif(R.loading)%7BG.appendChild(D(%22div.meta%22%2CD(%22span%22%2C%22Searching%20Watsonline%E2%80%A6%22)))%3Bfor(var%20t%3D0%3Bt%3C5%3Bt%2B%2B)G.appendChild(D(%22div.skeleton%22))%7Delse%20if(R.error)G.appendChild(D(%22div.err%22%2CR.error%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Aoe%7D%2C%22Retry%22)))%3Belse%7Bvar%20n%3Dnull!%3DR.total%3FR.total.toLocaleString()%2B(1%3D%3D%3DR.total%3F%22%20result%22%3A%22%20results%22)%3AR.results.length%2B%22%20shown%22%3Bif(G.appendChild(D(%22div.meta%22%2CD(%22span%22%2Cn)%2CD(%22span.sorts%22%2Cu.map(function(e)%7Breturn%20D(%22button%22%2B(R.sort%3D%3D%3De.key%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.sort!%3D%3De.key%26%26(R.sort%3De.key%2Coe())%7D%7D%2Ce.label)%7D))))%2CR.results.length)%7Bif(R.results.forEach(function(e)%7Bvar%20t%2Cn%2Cr%3BG.appendChild((n%3DD(%22button.bagbtn%22%2B(z((t%3De).id)%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2C%22aria-label%22%3Az(t.id)%3F%22Remove%20from%20bag%22%3A%22Add%20to%20bag%22%2Conclick%3Afunction(e)%7Be.stopPropagation()%2CM(t)%7D%7D%2Cz(t.id)%3F%22%E2%9C%93%22%3A%22%2B%22)%2Cr%3D%5Bt.author%2Ct.detail%5D.filter(Boolean).join(%22%20%C2%B7%20%22)%2CD(%22button.card%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7B(async%20function(e)%7Bvar%20t%3DD(%22div.sheet-body.detail%22)%2Cn%3DD(%22button.secondary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BM(e)%2Cn.textContent%3Dz(e.id)%3F%22%E2%9C%93%20In%20your%20bag%22%3A%22%2B%20Add%20to%20bag%22%7D%7D%2Cz(e.id)%3F%22%E2%9C%93%20In%20your%20bag%22%3A%22%2B%20Add%20to%20bag%22)%3Bfunction%20r(e%2Cr)%7Bt.innerHTML%3D%22%22%2Ct.appendChild(D(%22div.hero%22%2Cee(e%2C!0)%2CD(%22div%22%2C%7Bstyle%3A%22flex%3A1%3Bmin-width%3A0%22%7D%2CD(%22h1.serif%22%2Ce.title)%2Ce.author%3FD(%22p.by%22%2Ce.author)%3Anull%2Ce.detail%3FD(%22p.sub%22%2Ce.detail)%3Anull)))%3Bvar%20i%3D!1!%3D%3De.requestFound%7C%7C!e.fields%3Bif(t.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Cdisabled%3Ar%2Conclick%3Afunction()%7Bbe(%5Be%5D)%7D%7D%2Cr%3F%22Loading%E2%80%A6%22%3A%22Request%20this%20item%22))%2Ct.appendChild(n)%2Ci%7C%7Ct.appendChild(D(%22p.hint%22%2C%22Watsonline%20didn%E2%80%99t%20show%20a%20Request%20button%20for%20this%20record%3B%20it%20may%20be%20online-only%20or%20non-requestable.%20You%20can%20still%20try.%22))%2Ct.appendChild(D(%22div.section%22%2C%22Copies%22))%2Cr%26%26!e.holdings.length%3Ft.appendChild(D(%22div.skeleton%22%2C%7Bstyle%3A%22height%3A56px%22%7D))%3Ae.holdings.length%7C%7Ct.appendChild(D(%22p.sub%22%2C%22No%20item%20information%20found.%22))%2Ce.holdings.forEach(function(e)%7Bt.appendChild(D(%22div.hold%22%2CD(%22div.pills%22%2Ce.status%3FD(%22span.pill.%22%2BS(e.status)%2Ce.status)%3Anull%2Ce.extra%3FD(%22span.pill%22%2Ce.extra)%3Anull)%2Ce.location%3FD(%22div%22%2CD(%22b%22%2C%22Location%20%22)%2Ce.location)%3Anull%2Ce.call%3FD(%22div%22%2CD(%22b%22%2C%22Call%20number%20%22)%2CD(%22span%22%2C%7Bstyle%3A%22font-family%3Aui-monospace%2CMenlo%2Cmonospace%22%7D%2Ce.call))%3Anull))%7D)%2Ce.links%26%26e.links.length%26%26(t.appendChild(D(%22div.section%22%2C%22Online%22))%2Ct.appendChild(D(%22div.linklist%22%2Ce.links.map(function(e)%7Breturn%20D(%22a%22%2C%7Bhref%3Ae.href%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%7D%2Ce.text%2B%22%20%E2%86%97%22)%7D))))%2Ce.subjects%26%26e.subjects.length%26%26(t.appendChild(D(%22div.section%22%2C%22Subjects%22))%2Ct.appendChild(D(%22div.pills%22%2Ce.subjects.map(function(e)%7Breturn%20D(%22button.pill%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bde()%2CR.q%3De.split(%2F%5Cs%2B--%5Cs%2B%2F)%5B0%5D%2CR.field%3Dp%5B3%5D%2Cle(%22search%22)%2Cne()%2Coe()%7D%7D%2Ce)%7D))))%2Ce.fields%26%26e.fields.length)%7Bvar%20o%3DD(%22dl%22)%3Be.fields.forEach(function(e)%7B%2F%5E(subject%7Ctitle%7Cauthor)%2Fi.test(e.label)%7C%7C(o.appendChild(D(%22dt%22%2Ce.label))%2Ce.values.forEach(function(e)%7Bo.appendChild(D(%22dd%22%2Ce))%7D))%7D)%2Ct.appendChild(D(%22div.section%22%2C%22Details%22))%2Ct.appendChild(o)%7D%7Dif(ce(%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Back%22%2Conclick%3Ade%7D%2C%22%E2%86%90%22)%2CD(%22div.t%22%2Ce.title)%2CD(%22a.iconbtn%22%2C%7Bhref%3Ae.url%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2C%22aria-label%22%3A%22Open%20on%20Watsonline%22%2Cstyle%3A%22text-decoration%3Anone%22%7D%2C%22%E2%86%97%22)%5D%2Ct)%2Cr(e%2C!e.fields)%2C!e.fields)try%7Bvar%20i%3Dawait%20w(e.url)%2Co%3DU(i.doc%2Ci.url)%3B%5B%22title%22%2C%22author%22%2C%22detail%22%2C%22cover%22%5D.forEach(function(t)%7B!o%5Bt%5D%26%26e%5Bt%5D%26%26(o%5Bt%5D%3De%5Bt%5D)%7D)%2Co.holdings.length%7C%7C(o.holdings%3De.holdings)%2Cq.test(o.id)%7C%7C(o.id%3De.id)%2Co.requestUrl%7C%7C(o.requestUrl%3De.requestUrl)%2CObject.assign(e%2Co)%2Cr(e%2C!1)%7Dcatch(n)%7Br(e%2C!1)%2Ct.insertBefore(D(%22div.err%22%2C%22Couldn%E2%80%99t%20load%20the%20full%20record.%20%22%2B(n.message%7C%7C%22%22))%2Ct.firstChild)%7D%7D)(t)%7D%7D%2Cee(t)%2CD(%22div.body%22%2CD(%22h3.serif%22%2Ct.title%7C%7C%22Untitled%22)%2Cr%3FD(%22p.sub%22%2Cr)%3Anull%2Cfunction(e)%7Bvar%20t%3DD(%22div.pills%22)%2Cn%3De.holdings%5B0%5D%3Breturn%20n%3F(n.status%26%26t.appendChild(D(%22span.pill.%22%2BS(n.status)%2Cn.status))%2Cn.location%26%26t.appendChild(D(%22span.pill%22%2Cn.location))%2Cn.call%26%26t.appendChild(D(%22span.pill.call%22%2Cn.call))%2Ce.holdings.length%3E1%26%26t.appendChild(D(%22span.pill%22%2C%22%2B%22%2B(e.holdings.length-1)%2B%22%20more%22))%2Ct)%3At%7D(t))%2Cn)))%7D)%2CR.nextUrl)%7Bvar%20r%3DD(%22button.more%22%2C%7Btype%3A%22button%22%2Conclick%3Aae%2Cdisabled%3AR.loadingMore%7D%2CR.loadingMore%3F%22Loading%E2%80%A6%22%3A%22Load%20more%22)%3Bif(G.appendChild(r)%2C%22IntersectionObserver%22in%20window)%7Bvar%20i%3Dnew%20IntersectionObserver(function(e)%7Be%5B0%5D.isIntersecting%26%26(i.disconnect()%2Cae())%7D%2C%7Broot%3AG%2CrootMargin%3A%22400px%22%7D)%3Bi.observe(r)%7D%7D%7Delse%20G.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Nothing%20found%22)%2CD(%22p%22%2CR.total%3F%22Watsonline%20returned%20results%20in%20a%20layout%20this%20app%20couldn%E2%80%99t%20read.%22%3A%22Try%20fewer%20words%2C%20a%20different%20spelling%2C%20or%20search%20Everything%20instead%20of%20a%20single%20field.%22)%2CR.lastUrl%3FD(%22div.linklist%22%2CD(%22a%22%2C%7Bhref%3AR.lastUrl%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%7D%2C%22Open%20this%20search%20on%20Watsonline%20%E2%86%97%22))%3Anull))%7D%7D()%3A%22bag%22%3D%3D%3DR.tab%3FR.bag.length%7C%7CR.requested.length%3F(R.bag.length%26%26(G.appendChild(D(%22div.section%22%2CR.bag.length%2B(1%3D%3D%3DR.bag.length%3F%22%20item%22%3A%22%20items%22)))%2CR.bag.forEach(function(e)%7BG.appendChild(D(%22div.row%22%2Cee(e)%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title)%2CD(%22p.sub%22%2C%5Be.author%2Ce.detail%5D.filter(Boolean).join(%22%20%C2%B7%20%22)))%2CD(%22button.x%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Remove%22%2Conclick%3Afunction()%7BM(e)%7D%7D%2C%22%E2%9C%95%22)))%7D)%2CG.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bbe()%7D%7D%2C%22Check%20out%20%C2%B7%20request%20%22%2BR.bag.length%2B(1%3D%3D%3DR.bag.length%3F%22%20item%22%3A%22%20items%22)))%2CG.appendChild(D(%22p.hint%22%2C%22Requested%20books%20are%20paged%20to%20Watson%20Library%E2%80%99s%20reading%20room%20for%20your%20visit.%20Nothing%20leaves%20the%20building.%22)))%2CR.requested.length%26%26(G.appendChild(D(%22div.section%22%2C%22Recently%20requested%22))%2CR.requested.forEach(function(e)%7BG.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title)%2CD(%22p.sub%22%2Cnew%20Date(e.at).toLocaleDateString(void%200%2C%7Bmonth%3A%22short%22%2Cday%3A%22numeric%22%7D)%2B(e.author%3F%22%20%C2%B7%20%22%2Be.author%3A%22%22)))%2CD(%22a%22%2C%7Bhref%3Ae.url%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2Cstyle%3A%22color%3Avar(--muted)%3Bfont-size%3A13px%3Btext-decoration%3Anone%22%7D%2C%22Record%20%E2%86%97%22)))%7D)%2CG.appendChild(D(%22button.secondary%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7BR.requested%3D%5B%5D%2CO(i%2C%5B%5D)%2Cse()%7D%7D%2C%22Clear%20history%22))))%3AG.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Your%20bag%20is%20empty%22)%2CD(%22p%22%2C%22Tap%20%2B%20on%20any%20result%20to%20collect%20items%2C%20then%20check%20out%20to%20request%20them%20all%20at%20once.%22)%2CD(%22div.chips%22%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Ble(%22search%22)%7D%7D%2C%22Start%20searching%22))))%3A(G.appendChild(D(%22div.empty%22%2CD(%22h2.serif%22%2C%22Your%20Watsonline%20account%22)%2CD(%22p%22%2C%22See%20what%20you%20have%20checked%20out%2C%20your%20holds%2C%20saved%20searches%20and%20reading%20history.%20Sign%20in%20with%20your%20last%20name%20and%20the%20last%206%20digits%20of%20your%20library%20barcode.%22)%2CD(%22div.chips%22%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bhe(%22My%20account%22%2Cb%2C%7Blogout%3A!0%7D)%7D%7D%2C%22Open%20my%20account%22)%2CD(%22button%22%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Bhe(%22Sign%20out%22%2Cg%2C%7B%7D)%7D%7D%2C%22Sign%20out%22))))%2CG.appendChild(D(%22p.hint%22%2C%22Library%20cards%20are%20issued%20at%20the%20Watson%20Library%20desk%3B%20visitors%2018%2B%20are%20welcome.%22)))%2CP.innerHTML%3D%22%22%2C%5B%5B%22search%22%2C%22%F0%9F%94%8D%22%2C%22Search%22%5D%2C%5B%22bag%22%2C%22%F0%9F%91%9C%22%2C%22Bag%22%5D%2C%5B%22account%22%2C%22%F0%9F%91%A4%22%2C%22Account%22%5D%5D.forEach(function(e)%7Bvar%20t%3DD(%22button%22%2B(R.tab%3D%3D%3De%5B0%5D%3F%22.on%22%3A%22%22)%2C%7Btype%3A%22button%22%2Conclick%3Afunction()%7Ble(e%5B0%5D)%7D%7D%2CD(%22span.ico%22%2Ce%5B1%5D)%2Ce%5B2%5D)%3B%22bag%22%3D%3D%3De%5B0%5D%26%26R.bag.length%26%26t.appendChild(D(%22span.badge%22%2CString(R.bag.length)))%2CP.appendChild(t)%7D)%2CG.scrollTop%3De%7Dfunction%20de()%7BV.classList.remove(%22open%22)%2CsetTimeout(function()%7BV.classList.contains(%22open%22)%7C%7C(V.innerHTML%3D%22%22)%7D%2C300)%2Cse()%7Dfunction%20ce(e%2Ct)%7BV.innerHTML%3D%22%22%2CV.appendChild(D(%22div.sheet-head%22%2Ce))%2CV.appendChild(t)%2CrequestAnimationFrame(function()%7BV.classList.add(%22open%22)%7D)%7Dfunction%20pe(e)%7Btry%7Bvar%20t%3De.contentDocument%3Bif(!t%7C%7C!t.head)return%20null%3Bif(!t.querySelector('meta%5Bname%3D%22viewport%22%5D'))%7Bvar%20n%3Dt.createElement(%22meta%22)%3Bn.name%3D%22viewport%22%2Cn.content%3D%22width%3Ddevice-width%2C%20initial-scale%3D1%22%2Ct.head.appendChild(n)%7Dvar%20r%3Dt.createElement(%22style%22)%3Breturn%20r.textContent%3Dj%2Ct.head.appendChild(r)%2Ct%7Dcatch(e)%7Breturn%20null%7D%7Dfunction%20ue(e)%7Bvar%20t%3Dv(e.body%3Fe.body.textContent%3A%22%22)%3Breturn%2Fwas%20successful%7Csuccessfully%20(placed%7Crequested%7Csubmitted)%7Crequest%20has%20been%20(placed%7Creceived%7Csubmitted)%7Cyour%20request%20for%20.*%20was%2Fi.test(t)%3F%22success%22%3Ae.querySelector('input%5Bname%3D%22code%22%5D%2C%20input%5Bname%3D%22pin%22%5D%2C%20input%5Bname%3D%22password%22%5D%2C%20input%5Btype%3D%22password%22%5D%2C%20form%5Baction*%3D%22cas%2Flogin%22%5D')%3F%22login%22%3A%2Fnot%20requestable%7Ccannot%20be%20requested%7Ccan%20not%20be%20requested%7Cno%20items%3F%20(are%20)%3Favailable%7Cunable%20to%20(place%7Cprocess)%7Calready%20(have%7Crequested%7Cplaced)%7Cnot%20eligible%7Cexceeds%2Fi.test(t)%3F%22problem%22%3A%22form%22%7Dfunction%20fe(e%2Ct%2Cn%2Cr)%7Be.className%3D%22banner%22%2B(t%3F%22%20%22%2Bt%3A%22%22)%2Ce.innerHTML%3D%22%22%2Ce.appendChild(document.createTextNode(n%2B%22%20%22))%2Cr%26%26e.appendChild(D(%22a%22%2C%7Bhref%3Ar%2Ctarget%3A%22_blank%22%2Crel%3A%22noopener%22%2Cstyle%3A%22font-weight%3A600%3Bwhite-space%3Anowrap%22%7D%2C%22Open%20in%20Watsonline%20%E2%86%97%22))%7Dfunction%20he(e%2Ct%2Cn)%7Bvar%20r%3DD(%22div.banner%22)%3Bfe(r%2C%22%22%2C%22Loading%20Watsonline%E2%80%A6%22%2Ct)%3Bvar%20i%3DD(%22iframe%22%2C%7Bsrc%3At%2Ctitle%3Ae%7D)%2Co%3DD(%22div.sheet-body.frame%22%2Cr%2Ci)%2Ca%3D%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Close%22%2Conclick%3Ade%7D%2C%22%E2%9C%95%22)%2CD(%22div.t%22%2Ce)%5D%3Bn%26%26n.logout%26%26a.push(D(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Sign%20out%22%2Ctitle%3A%22Sign%20out%22%2Conclick%3Afunction()%7Bi.src%3Dg%7D%7D%2C%22%E2%8E%8B%22))%2Cce(a%2Co)%2Ci.addEventListener(%22load%22%2Cfunction()%7Bvar%20e%3Dpe(i)%3Be%3F%22login%22%3D%3D%3Due(e)%3Ffe(r%2C%22%22%2C%22Sign%20in%20with%20your%20last%20name%20and%20the%20last%206%20digits%20of%20your%20library%20barcode.%22%2Ct)%3A%2Flogout%2F.test(i.src)%3Ffe(r%2C%22ok%22%2C%22You%E2%80%99re%20signed%20out.%22%2C%22%22)%3Afe(r%2C%22%22%2C%22Your%20Watsonline%20account.%22%2Ct)%3Afe(r%2C%22warn%22%2C%22Watsonline%20wouldn%E2%80%99t%20load%20inside%20this%20sheet.%22%2Ct)%7D)%7Dfunction%20be(e)%7Bvar%20t%3D(e%7C%7CR.bag).slice()%3Bif(t.length)%7Bvar%20r%3D0%2Co%3D%7B%7D%2Ca%3DD(%22div.banner%22)%2Cl%3DD(%22iframe%22%2C%7Btitle%3A%22Watsonline%20request%22%7D)%2Cs%3DD(%22div.t%22)%2Cd%3DD(%22div.stepper%22)%2Cc%3DD(%22div.sheet-body.frame%22%2Ca%2Cl)%2Cp%3DD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Skip%22%2Ctitle%3A%22Skip%20this%20item%22%2Conclick%3Afunction()%7Bo%5Bt%5Br%5D.id%5D%3Do%5Bt%5Br%5D.id%5D%7C%7C%22skipped%22%2Cb()%7D%7D%2C%22%E2%8F%AD%22)%3Bce(%5BD(%22button.iconbtn%22%2C%7Btype%3A%22button%22%2C%22aria-label%22%3A%22Close%22%2Conclick%3Ade%7D%2C%22%E2%9C%95%22)%2CD(%22div%22%2C%7Bstyle%3A%22flex%3A1%3Bmin-width%3A0%22%7D%2Cs%2Cd)%2Cp%5D%2Cc)%2Cl.addEventListener(%22load%22%2Cfunction()%7Bvar%20e%3Dt%5Br%5D%3Bif(e)%7Bvar%20s%3Dpe(l)%3Bif(s)%7Bvar%20d%3Due(s)%3B%22success%22%3D%3D%3Dd%3F%22success%22!%3D%3Do%5Be.id%5D%26%26(o%5Be.id%5D%3D%22success%22%2Cfunction(e)%7BR.bag%3DR.bag.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)%2CR.requested%3D%5B%7Bid%3Ae.id%2Ctitle%3Ae.title%2Cauthor%3Ae.author%2Curl%3Ae.url%2Cat%3ADate.now()%7D%5D.concat(R.requested.filter(function(t)%7Breturn%20t.id!%3D%3De.id%7D)).slice(0%2C30)%2CO(n%2CR.bag)%2CO(i%2CR.requested)%7D(e)%2Cfe(a%2C%22ok%22%2C%22%E2%9C%93%20Requested.%20%22%2B(r%2B1%3Ct.length%3F%22Next%20item%20in%20a%20moment%E2%80%A6%22%3A%22Wrapping%20up%E2%80%A6%22)%2C%22%22)%2CsetTimeout(b%2C1400))%3A%22login%22%3D%3D%3Dd%3Ffe(a%2C%22%22%2C%22Sign%20in%20to%20place%20the%20request%3A%20last%20name%20%2B%20last%206%20digits%20of%20your%20library%20barcode.%22%2Cu())%3A%22problem%22%3D%3D%3Dd%3F(o%5Be.id%5D%3D%22not%20requestable%22%2Cfe(a%2C%22warn%22%2C%22Watsonline%20couldn%E2%80%99t%20take%20this%20request.%20Tap%20%E2%8F%AD%20to%20skip%20it.%22%2Cu()))%3Afe(a%2C%22%22%2C%22Choose%20a%20pickup%20location%20if%20asked%2C%20then%20submit%20the%20request.%22%2Cu())%7Delse%20fe(a%2C%22warn%22%2C%22Watsonline%20wouldn%E2%80%99t%20load%20inside%20this%20sheet.%20Request%20it%20there%2C%20then%20tap%20%E2%8F%AD.%22%2Cu())%7D%7D)%2Cf()%7Dfunction%20u()%7Bvar%20e%3Dt%5Br%5D%3Breturn%20e.requestUrl%7C%7C(q.test(e.id)%3Fh(e.id)%3Ae.url)%7Dfunction%20f()%7Bvar%20e%3Dt%5Br%5D%3Bs.textContent%3De.title%2Cd.textContent%3D%22Checkout%20%C2%B7%20%22%2B(r%2B1)%2B%22%20of%20%22%2Bt.length%2Cfe(a%2C%22%22%2C%22Loading%20request%20form%E2%80%A6%22%2Cu())%2Cl.src%3Du()%7Dfunction%20b()%7Bvar%20e%2Cn%2Ci%3B%2B%2Br%3Ct.length%3Ff()%3A(e%3Dt.filter(function(e)%7Breturn%22success%22%3D%3D%3Do%5Be.id%5D%7D)%2Cn%3Dt.filter(function(e)%7Breturn%22success%22!%3D%3Do%5Be.id%5D%7D)%2Ci%3DD(%22div.sheet-body%22%2CD(%22h1.serif%22%2C%7Bstyle%3A%22font-size%3A26px%3Bmargin%3A8px%200%206px%22%7D%2Ce.length%3F%22Requested%20%22%2Be.length%2B(1%3D%3D%3De.length%3F%22%20item%22%3A%22%20items%22)%3A%22No%20requests%20placed%22)%2CD(%22p.sub%22%2Ce.length%3F%22Watson%20Library%20will%20page%20these%20for%20you.%20Check%20the%20paging%20schedule%20for%20when%20they%E2%80%99ll%20be%20ready%20in%20the%20reading%20room.%22%3A%22Nothing%20was%20confirmed%20by%20Watsonline.%22))%2Ce.length%26%26(i.appendChild(D(%22div.section%22%2C%22Requested%22))%2Ce.forEach(function(e)%7Bi.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title))%2CD(%22span.pill.ok%22%2C%22%E2%9C%93%22)))%7D))%2Cn.length%26%26(i.appendChild(D(%22div.section%22%2C%22Still%20in%20your%20bag%22))%2Cn.forEach(function(e)%7Bi.appendChild(D(%22div.row%22%2CD(%22div.body%22%2CD(%22h4.serif%22%2Ce.title))%2CD(%22span.pill.busy%22%2Co%5Be.id%5D%7C%7C%22skipped%22)))%7D))%2Ci.appendChild(D(%22button.primary%22%2C%7Btype%3A%22button%22%2Cstyle%3A%22margin-top%3A20px%22%2Conclick%3Afunction()%7Bde()%2Cle(%22bag%22)%7D%7D%2C%22Done%22))%2CV.innerHTML%3D%22%22%2CV.appendChild(D(%22div.sheet-head%22%2CD(%22div.t%22%2C%22Checkout%20complete%22)))%2CV.appendChild(i))%7D%7D(re%3Ddocument.querySelector('meta%5Bname%3D%22viewport%22%5D'))%7C%7C((re%3Ddocument.createElement(%22meta%22)).name%3D%22viewport%22%2Cdocument.head.appendChild(re))%2Cre.content%3D%22width%3Ddevice-width%2C%20initial-scale%3D1%2C%20viewport-fit%3Dcover%22%2Cdocument.documentElement.style.overflow%3D%22hidden%22%2Cdocument.body.style.overflow%3D%22hidden%22%2Cdocument.body.appendChild(B)%2Cdocument.addEventListener(%22keydown%22%2CZ)%2Cse()%2C!R.searched%26%26J%26%26setTimeout(function()%7Btry%7BJ.focus()%7Dcatch(e)%7B%7D%7D%2C350)%2Co()%7D)()%3B">Copy link</button></p>
+  </div>
+
+  <h2>How it works</h2>
+  <p>The script runs <em>on</em> library.metmuseum.org, so it can fetch Watsonline's own HTML pages (same origin) and re-render them as a clean, phone-sized interface on top of the site. Nothing is proxied through a third party.</p>
+  <ul>
+    <li><b>Search</b> uses Watsonline's keyword search (with <code>t:</code>, <code>a:</code>, <code>d:</code> qualifiers for title, author, subject) and parses the brief-citation rows.</li>
+    <li><b>Checkout</b> is Watsonline's own Request flow. Each item in your bag opens its request form inside a sheet with mobile-friendly styling; you sign in once (last name + last 6 digits of your library barcode), pick a pickup location if asked, submit, and the app advances to the next item when it sees the confirmation.</li>
+    <li><b>Your bag, recent searches and request history</b> live in Safari's local storage for library.metmuseum.org — on your device only.</li>
+    <li><b>Cover images</b> come from Open Library when a record lists an ISBN; that is the only third-party request.</li>
+  </ul>
+  <p class="note">Watson Library is a non-circulating research library: “checkout” here means having books paged to the reading room for your visit. You need a Watson Library card (issued at the desk, visitors 18+) to place requests.</p>
+  <p class="muted">Watsonline runs on Innovative's Sierra WebPAC. The app targets that catalog's standard URL and markup conventions with several fallbacks, and when a page can't be parsed it always offers an “Open in Watsonline” link. If the Met changes their catalog templates, <a href="https://github.com/cwervo/bookmarklets/issues">open an issue</a>.</p>
+
+  <footer>Built 2026-09-13 · <a href="https://github.com/cwervo/bookmarklets/tree/master/met-library">Source on GitHub</a> · <a href="../">All bookmarklets</a></footer>
+</main>
+<script>
+  function copyText(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(function () { btn.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () { fallback(); }); } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { alert('Copy failed — select the text manually.'); }
+      ta.remove();
+    }
+  }
+  document.getElementById('copy-shortcut').addEventListener('click', function () {
+    copyText(document.getElementById('shortcut-script').value, this);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (b) {
+    b.addEventListener('click', function () { copyText(b.getAttribute('data-copy'), b); });
+  });
+</script>
+</body>
+</html>

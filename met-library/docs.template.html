@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Watson Library — a modern search &amp; checkout flow for the Met's library catalog</title>
+  <meta name="description" content="A bookmarklet / iOS Shortcut that wraps library.metmuseum.org (Watsonline) in a phone-first search, bag and request flow.">
+  <style>
+    :root { --red: #e4002b; --fg: #141414; --muted: #666; --line: #e5e3de; --bg: #faf9f6; --card: #fff; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #f1f1f1; --muted: #a5a5a5; --line: #2b2b2b; --bg: #111; --card: #1b1b1b; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--fg); background: var(--bg); padding: 0 20px; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 0 80px; }
+    .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--red); font-weight: 700; }
+    h1 { font-family: "New York", "Iowan Old Style", Palatino, Georgia, serif; font-size: 40px; line-height: 1.1; margin: 4px 0 12px; }
+    h2 { font-family: "New York", "Iowan Old Style", Palatino, Georgia, serif; font-size: 26px; margin: 44px 0 10px; }
+    h3 { font-size: 17px; margin: 22px 0 6px; }
+    p { margin: 0 0 14px; }
+    .lead { font-size: 20px; color: var(--muted); }
+    a { color: var(--red); }
+    ol, ul { padding-left: 22px; } li { margin-bottom: 8px; }
+    .btn { display: inline-block; padding: 12px 18px; border-radius: 12px; background: var(--red); color: #fff !important; text-decoration: none; font-weight: 700; margin: 4px 8px 8px 0; border: 0; font: inherit; cursor: pointer; }
+    .btn.alt { background: var(--fg); color: var(--bg) !important; }
+    .btn.ghost { background: transparent; color: var(--fg) !important; border: 1px solid var(--line); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin: 14px 0; }
+    .card p:last-child { margin-bottom: 0; }
+    details { margin: 10px 0; } summary { cursor: pointer; font-weight: 600; }
+    textarea { width: 100%; height: 220px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--card); color: var(--fg); margin-top: 10px; }
+    code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+    .grid div { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .grid b { display: block; margin-bottom: 4px; }
+    .muted { color: var(--muted); font-size: 15px; }
+    .note { border-left: 3px solid var(--red); padding-left: 14px; color: var(--muted); }
+    footer { margin-top: 60px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">The Met · Thomas J. Watson Library</div>
+  <h1>Watson Library, but for your phone</h1>
+  <p class="lead">A bookmarklet that wraps <a href="https://library.metmuseum.org">library.metmuseum.org</a> (Watsonline) in a modern search, bag and request flow. Launch it from the iOS Shortcuts share sheet or a Safari bookmark.</p>
+
+  <div class="grid">
+    <div><b>🔍 Search</b><span class="muted">Big search box, Everything / Title / Author / Subject, recent searches, endless scroll.</span></div>
+    <div><b>📖 Records</b><span class="muted">Clean detail sheet: copies, call numbers, status, subjects, online links.</span></div>
+    <div><b>👜 Bag → Checkout</b><span class="muted">Collect books, then request them all in one guided flow. Watson pages them for your visit.</span></div>
+    <div><b>👤 Account</b><span class="muted">Sign in, see checkouts and holds, sign out — inside the same sheet.</span></div>
+  </div>
+
+  <h2>1 · Install as an iOS Shortcut</h2>
+  <p>iOS Shortcuts can run JavaScript on the page that's open in Safari. Set it up once, then it's one tap from the share sheet.</p>
+  <div class="card">
+    <ol>
+      <li>Open the <b>Shortcuts</b> app and tap <b>+</b> to create a new shortcut.</li>
+      <li>Add the action <b>Run JavaScript on Web Page</b> (search for it; it's under Safari).</li>
+      <li>Delete the sample code inside the action and paste the script below.
+        <p><button class="btn" id="copy-shortcut" type="button">Copy the Shortcut script</button></p>
+        <details><summary>Show the script</summary><textarea readonly id="shortcut-script">__SHORTCUT_SCRIPT__</textarea></details>
+      </li>
+      <li>Tap the shortcut's name at the top → <b>Rename</b> it “Watson Library”, then open its details (ⓘ) and turn on <b>Show in Share Sheet</b>. Under <b>Share Sheet Types</b> keep only <b>Safari web pages</b>.</li>
+      <li>In Safari, open <a href="https://library.metmuseum.org">library.metmuseum.org</a>, tap the <b>Share</b> button and choose <b>Watson Library</b>.</li>
+    </ol>
+    <p class="muted">Run it from any other page and it simply sends you to Watsonline first; run it again once the page has loaded. You can also download the script as <a href="./shortcut.js">shortcut.js</a>.</p>
+  </div>
+
+  <h2>2 · …or as a Safari bookmarklet</h2>
+  <p>On a Mac, drag either button to the bookmarks bar. On an iPhone: bookmark any page, then <b>Edit</b> the bookmark and replace its address with the copied link.</p>
+  <div class="card">
+    <h3>Loader (recommended)</h3>
+    <p class="muted">Tiny bookmark that pulls the latest <code>app.js</code> from this page every time, so you always get updates.</p>
+    <p><a class="btn" href="__BOOKMARKLET_LOADER__">Watson Library</a> <button class="btn ghost" type="button" data-copy="__BOOKMARKLET_LOADER__">Copy link</button></p>
+    <h3>Self-contained</h3>
+    <p class="muted">The whole app inside the bookmark (__FULL_SIZE__). Works even if this page goes away; update it by hand.</p>
+    <p><a class="btn alt" href="__BOOKMARKLET_FULL__">Watson Library (offline)</a> <button class="btn ghost" type="button" data-copy="__BOOKMARKLET_FULL__">Copy link</button></p>
+  </div>
+
+  <h2>How it works</h2>
+  <p>The script runs <em>on</em> library.metmuseum.org, so it can fetch Watsonline's own HTML pages (same origin) and re-render them as a clean, phone-sized interface on top of the site. Nothing is proxied through a third party.</p>
+  <ul>
+    <li><b>Search</b> uses Watsonline's keyword search (with <code>t:</code>, <code>a:</code>, <code>d:</code> qualifiers for title, author, subject) and parses the brief-citation rows.</li>
+    <li><b>Checkout</b> is Watsonline's own Request flow. Each item in your bag opens its request form inside a sheet with mobile-friendly styling; you sign in once (last name + last 6 digits of your library barcode), pick a pickup location if asked, submit, and the app advances to the next item when it sees the confirmation.</li>
+    <li><b>Your bag, recent searches and request history</b> live in Safari's local storage for library.metmuseum.org — on your device only.</li>
+    <li><b>Cover images</b> come from Open Library when a record lists an ISBN; that is the only third-party request.</li>
+  </ul>
+  <p class="note">Watson Library is a non-circulating research library: “checkout” here means having books paged to the reading room for your visit. You need a Watson Library card (issued at the desk, visitors 18+) to place requests.</p>
+  <p class="muted">Watsonline runs on Innovative's Sierra WebPAC. The app targets that catalog's standard URL and markup conventions with several fallbacks, and when a page can't be parsed it always offers an “Open in Watsonline” link. If the Met changes their catalog templates, <a href="https://github.com/cwervo/bookmarklets/issues">open an issue</a>.</p>
+
+  <footer>Built __BUILT__ · <a href="https://github.com/cwervo/bookmarklets/tree/master/met-library">Source on GitHub</a> · <a href="../">All bookmarklets</a></footer>
+</main>
+<script>
+  function copyText(text, btn) {
+    var done = function () { var t = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(function () { btn.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () { fallback(); }); } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { alert('Copy failed — select the text manually.'); }
+      ta.remove();
+    }
+  }
+  document.getElementById('copy-shortcut').addEventListener('click', function () {
+    copyText(document.getElementById('shortcut-script').value, this);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-copy]'), function (b) {
+    b.addEventListener('click', function () { copyText(b.getAttribute('data-copy'), b); });
+  });
+</script>
+</body>
+</html>
